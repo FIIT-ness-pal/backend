@@ -21,10 +21,10 @@ export class User {
     @Column()
     email: string;
 
-    @Column("double")
+    @Column("real")
     weight: number;
 
-    @Column("double")
+    @Column("real")
     height: number;
 
     @Column("timestamp")
