@@ -4,7 +4,7 @@ import {User} from "./entity/User";
 import * as express from "express";
 
 var app = express();
-var port = process.env.PORT || 3000;
+var port = 3000;
 
 app.get('/', (req, res) => {
     res.send('Hello World!');
@@ -12,7 +12,7 @@ app.get('/', (req, res) => {
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
-  })
+})
 
 /*
 createConnection().then(async connection => {
