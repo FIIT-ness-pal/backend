@@ -1,37 +1,84 @@
-import "reflect-metadata";
 import {createConnection} from "typeorm";
-import {User} from "./entity/User";
 import * as express from "express";
 
 var app = express();
 var port = 3000;
 
+const dbConnect = async () => {
+    try {
+        await createConnection();
+        console.log("Connected to database")
+    }
+    catch(error) {
+        console.error("Connection to database failed", error)
+    }
+}
 
-createConnection().then(async connection => {
-
-    /*
-    let user = new User();
-    user.firstName = "Timber";
-    user.lastName = "Saw";
-    user.userName = "timber";
-    user.passwordHash = "123";
-    user.email = "dasda";
-    user.weight = 123.1;
-    user.height = 123.1;
-    user.birthDate = new Date();
-    user.calorieGoal = 123;
-    user.photoUrl = "dasdas";
-
-    await connection.manager.save(user);
-    */
-
-}).catch(error => console.log(error));
+dbConnect()
 
 app.get('/', (_req, res) => {
     res.send('Hello World!');
 });
 
+app.route('/meal')
+    .get((req, res) => {
+
+    })
+    .post((req, res) => {
+
+    })
+    .put((req, res) => {
+
+    })
+    .delete((req, res) => {
+
+    })
+
+app.route('/food')
+    .get((req, res) => {
+
+    })
+    .post((req, res) => {
+
+    })
+    .put((req, res) => {
+
+    })
+    .delete((req, res) => {
+        
+    })
+
+app.route('/log')
+    .get((req, res) => {
+
+    })
+    .post((req, res) => {
+
+    })
+    .put((req, res) => {
+
+    })
+    .delete((req, res) => {
+        
+    })
+
+app.get('/meals', (req, res) => {
+
+})
+
+app.get('/foods', (req, res) => {
+    
+})
+
+app.post('/login', (req, res) => {
+
+})
+
+app.post('/register', (req, res) => {
+    
+})
+
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
+    console.log(`Server is running on port ${port}`)
 })
 
