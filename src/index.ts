@@ -1,8 +1,10 @@
+require('dotenv').config()
+
 import {createConnection, createQueryBuilder} from "typeorm";
 import * as bcrypt from "bcrypt"
 import * as express from "express";
+import * as jwt from "jsonwebtoken"
 import { User } from "./entities/User";
-import { request } from "http";
 
 var app = express();
 var port = 3000;
@@ -75,8 +77,48 @@ app.get('/foods', (req, res) => {
     
 })
 
-app.post('/login', (req, res) => {
-
+app.post('/login', async (req, res) => {
+    console.log("POST on /login", req.body)
+    res.setHeader("Content-Type", "application/json")
+    // Check if all fields are present
+    if(!req.body.hasOwnProperty("email") || !req.body.hasOwnProperty("password")) {
+        res.status(422)
+        res.send({"status": 422, "message": "Email or password is missing"})
+    }
+    else {
+        // Find the email
+        const user = await createQueryBuilder()
+        .select("user")
+        .from(User, "user")
+        .where("user.email = :email", { email: req.body.email})
+        .getOne()
+        // Email was not found
+        if(user === undefined) {
+            res.status(404)
+            res.send({"status": 404, "message": "User does not exist"})
+        }
+        else {
+            // Compare the passwords
+            bcrypt.compare(req.body.password, user.passwordHash, (err, result) => {
+                if(err) {
+                    res.status(500)
+                    res.send({"status": 500, "message": "Error authenticating, please try again later"})
+                }
+                else {
+                    if(result) {
+                        // Create JWT token
+                        const token = jwt.sign({"email": user.email}, process.env.ACCESS_TOKEN_SECRET)
+                        res.status(201)
+                        res.send({"status": 201, "message": "Authenticated", "accessToken": token})
+                    }
+                    else {
+                        res.status(401)
+                        res.send({"status": 401, "message": "Incorrect password"})
+                    }
+                }
+            })
+        }
+    }
 })
 
 app.post('/register', async (req, res) => {
