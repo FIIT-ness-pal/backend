@@ -1,16 +1,17 @@
 require('dotenv').config()
 
-import {createConnection, createQueryBuilder} from "typeorm";
+import {Brackets, createConnection, createQueryBuilder} from "typeorm";
 import * as bcrypt from "bcrypt"
 import * as express from "express";
 import * as jwt from "jsonwebtoken"
 import { User } from "./entities/User";
+import { Food } from "./entities/Food";
+import { Meal } from "./entities/Meal";
 
 var app = express();
 var port = 3000;
 
 app.use(express.json())
-
 const dbConnect = async () => {
     try {
         await createConnection();
@@ -69,12 +70,62 @@ app.route('/log')
         
     })
 
-app.get('/meals', (req, res) => {
-
+app.get('/meals', async (req, res) => {
+    console.log("got GET on /meals", req.query)
+    res.setHeader("Content-Type", "application/json")
+    // TODO get userId from JWT
+    const userId = "44de85bb-7ddc-436a-a653-f139a45f1009"
+    const name = req.query.name
+    // There is no name parameter
+    if(name === undefined) {
+        res.status(422)
+        res.send({"status": 422, "message": "Missing name in the query parameters"})
+    }
+    else {
+        const meals = await createQueryBuilder()
+        .select("meals")
+        .from(Meal, "meal")
+        .where("meal.name like :name", { name: `%${name}%`})
+        .andWhere(
+            // Get public or user's meals
+            new Brackets((qb) => {
+                qb.where("meal.isPublic = true")
+                .orWhere("meal.userId = :userId", { userId: userId})
+            })
+        )
+        .getMany()
+        res.status(200)
+        res.send({"status": 200, "message": "OK", "meals": meals})
+    }
 })
 
-app.get('/foods', (req, res) => {
-    
+app.get('/foods', async (req, res) => {
+    console.log("got GET on /foods", req.query)
+    res.setHeader("Content-Type", "application/json")
+    // TODO get userId from JWT
+    const userId = "44de85bb-7ddc-436a-a653-f139a45f1009"
+    const name = req.query.name
+    // There is no name parameter
+    if(name === undefined) {
+        res.status(422)
+        res.send({"status": 422, "message": "Missing name in the query parameters"})
+    }
+    else {
+        const foods = await createQueryBuilder()
+        .select("food")
+        .from(Food, "food")
+        .where("food.name like :name", { name: `%${name}%`})
+        .andWhere(
+            new Brackets((qb) => {
+                // Get public or user's foods
+                qb.where("food.isPublic = true")
+                .orWhere("food.userId = :userId", { userId: userId})
+            })
+        )
+        .getMany()
+        res.status(200)
+        res.send({"status": 200, "message": "OK", "foods": foods})
+    }
 })
 
 app.post('/login', async (req, res) => {
@@ -107,7 +158,7 @@ app.post('/login', async (req, res) => {
                 else {
                     if(result) {
                         // Create JWT token
-                        const token = jwt.sign({"email": user.email}, process.env.ACCESS_TOKEN_SECRET)
+                        const token = jwt.sign({"id": user.id}, process.env.ACCESS_TOKEN_SECRET)
                         res.status(201)
                         res.send({"status": 201, "message": "Authenticated", "accessToken": token})
                     }
@@ -192,12 +243,10 @@ app.post('/register', async (req, res) => {
             }
             else {
                 // Check if email is already taken
-                const user = await createQueryBuilder(
-                    "user"
-                )
+                const user = await createQueryBuilder()
                 .select("user")
                 .from(User, "user")
-                .where("user.email = :email", { email: req.body.email})
+                .where("user.email = :email", { email: `%${req.body.email}%`})
                 .getOne()
                 if(user === undefined) {
                     // Insert user into database
