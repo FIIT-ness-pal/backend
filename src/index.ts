@@ -16,7 +16,9 @@ var port = 3000;
 app.use(express.json())
 const dbConnect = async () => {
     try {
-        await createConnection();
+        await createConnection().then(async conn => {
+            await conn.runMigrations()
+        })
         console.log("Connected to database")
     }
     catch(error) {
