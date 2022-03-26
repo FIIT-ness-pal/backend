@@ -78,7 +78,42 @@ app.route('/food')
 
     })
     .delete(authenticateJWT, async (req, res) => {
-        res.send();
+        console.log('got DELETE on /food', req.query);
+        res.setHeader('Content-Type', 'application/json');
+
+        let foodId = req.query.id;
+
+        if(!foodId) {
+            res.status(422).send({status: "422", message: "Missing food id parameter"});
+        } else {
+            // validate food id format
+            let validateUUID = testUUID(foodId);
+            if (!validateUUID) {
+                res.status(422).send({status: "422", message: "Invalid food id format"});
+                return;
+            }
+        }
+
+        // Get the food from DB
+        let food = await createQueryBuilder()
+        .select("food.id")
+        .from(Food, "food")
+        .where("food.id = :id", {id: foodId})
+        .leftJoinAndSelect("food.user", "user.id")
+        .getOne();
+
+        // Check if the user created this food
+        if(food.user.id === req.user.id) {
+            await createQueryBuilder()
+            .delete()
+            .from(Food, "food")
+            .where("food.id = :id", {id: foodId})
+            .execute();
+
+            res.status(200).send({status: "200", message: "OK"});
+        } else {
+            res.status(403).send({status: 403, message: "Access denied"});
+        }
     })
 
 app.route('/log')

@@ -10,8 +10,6 @@ export function testUUID (uuid: string): boolean {
 // Authenticate JWT
 export function authenticateJWT(req, res, next): any {
     const token = req.headers['authorization'];
-    console.log('JWT TOKEN', token);
-    
 
     if (!token) {
         return res.status(401).send({status: 401, message: 'Access denied. No token provided.'});
