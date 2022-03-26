@@ -47,7 +47,7 @@ app.route('/meal')
     })
 
 app.route('/food')
-    .get(async (req, res) => {
+    .get(authenticateJWT, async (req, res) => {
         // treba kontrolovat aj isPublic?
         console.log('got GET on /food', req.query);
         res.setHeader('Content-Type', 'application/json');
@@ -64,13 +64,25 @@ app.route('/food')
                 return;
             }
             
+            // Get the food from DB
             let food = await createQueryBuilder()
             .select("food")
             .from(Food, "food")
             .where("food.id = :id", {id: foodId})
+            .leftJoinAndSelect("food.user", "user.id")
             .getOne();
-
-            res.status(200).send({status: "200", message: "OK", food: food});
+            
+            if(food == null) { // Food doesn't exist
+                res.status(404).send({status: "404", message: "Food not found"});
+            } else if(food.user == null) { // Food has no owner
+                delete food.user;
+                res.status(200).send({status: "200", food: food});
+            } else if((food.user.id === req.user.id) || food.isPublic) { // If the user who requesting the food is the owner or if the food is public
+                delete food.user;
+                res.status(200).send({status: "200", food: food});
+            } else { // The food exists but the user doesn't have access to it
+                res.status(403).send({status: "403", message: "Access denied"});
+            }
         }
     })
     .post((req, res) => {
@@ -114,7 +126,7 @@ app.route('/food')
 
             res.status(200).send({status: "200", message: "OK"});
         } else {
-            res.status(403).send({status: 403, message: "Access denied"});
+            res.status(403).send({status: "403", message: "Access denied"});
         }
     })
 
