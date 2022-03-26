@@ -8,7 +8,7 @@ import { User } from "./entities/User";
 import { Food } from "./entities/Food";
 import { Meal } from "./entities/Meal";
 
-import { testUUID } from "./functions";
+import { authenticateJWT, testUUID } from "./functions";
 
 var app = express();
 var port = 3000;
@@ -77,8 +77,8 @@ app.route('/food')
     .put((req, res) => {
 
     })
-    .delete((req, res) => {
-        
+    .delete(authenticateJWT, async (req, res) => {
+        res.send();
     })
 
 app.route('/log')
