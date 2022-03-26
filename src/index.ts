@@ -1,12 +1,14 @@
 require('dotenv').config()
 
 import {Brackets, createConnection, createQueryBuilder} from "typeorm";
-import * as bcrypt from "bcrypt"
+import * as bcrypt from "bcrypt";
 import * as express from "express";
 import * as jwt from "jsonwebtoken"
 import { User } from "./entities/User";
 import { Food } from "./entities/Food";
 import { Meal } from "./entities/Meal";
+
+import { testUUID } from "./functions";
 
 var app = express();
 var port = 3000;
@@ -43,8 +45,31 @@ app.route('/meal')
     })
 
 app.route('/food')
-    .get((req, res) => {
+    .get(async (req, res) => {
+        // treba kontrolovat aj isPublic?
+        console.log('got GET on /food', req.query);
+        res.setHeader('Content-Type', 'application/json');
 
+        let foodId = req.query.id;
+
+        if (!foodId) {
+            res.status(422).send({status: "422", message: "Missing food id parameter"});
+        } else {
+            // validate food id format
+            let validateUUID = testUUID(foodId);
+            if (!validateUUID) {
+                res.status(422).send({status: "422", message: "Invalid food id format"});
+                return;
+            }
+            
+            let food = await createQueryBuilder()
+            .select("food")
+            .from(Food, "food")
+            .where("food.id = :id", {id: foodId})
+            .getOne();
+
+            res.status(200).send({status: "200", message: "OK", food: food});
+        }
     })
     .post((req, res) => {
 
