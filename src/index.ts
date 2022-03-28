@@ -56,8 +56,7 @@ app.route('/meal')
     })
 
 app.route('/food')
-    .get(async (req, res) => {
-        // treba kontrolovat aj isPublic?
+    .get(authenticateJWT, async (req, res) => {
         console.log('got GET on /food', req.query);
         res.setHeader('Content-Type', 'application/json');
 
@@ -66,24 +65,118 @@ app.route('/food')
         if (!foodId) {
             res.status(422).send({status: "422", message: "Missing food id parameter"});
         } else {
-            // validate food id format
+            // Validate food id format
             let validateUUID = testUUID(foodId);
             if (!validateUUID) {
                 res.status(422).send({status: "422", message: "Invalid food id format"});
                 return;
             }
             
+            // Get the food from DB
             let food = await createQueryBuilder()
             .select("food")
             .from(Food, "food")
             .where("food.id = :id", {id: foodId})
+            .leftJoinAndSelect("food.user", "user.id")
             .getOne();
-
-            res.status(200).send({status: "200", message: "OK", food: food});
+            
+            if(food == null) { // Food doesn't exist
+                res.status(404).send({status: "404", message: "Food not found"});
+            } else if(food.user == null) { // Food has no owner
+                delete food.user;
+                res.status(200).send({status: "200", food: food});
+            } else if((food.user.id === req.user.id) || food.isPublic) { // If the user who requesting the food is the owner or if the food is public
+                delete food.user;
+                res.status(200).send({status: "200", food: food});
+            } else { // The food exists but the user doesn't have access to it
+                res.status(401).send({status: "401", message: "Access denied"});
+            }
         }
     })
-    .post((req, res) => {
+    .post(authenticateJWT, async(req, res) => {
+        console.log('got POST on /food', req.query);
+        res.setHeader("Content-Type", "application/json");
 
+        const properties = ['name', 'description', 'userId', 'brand', 'calories', 'carbs', 'protein', 'fat', 'isPublic'];
+        let error = "";
+
+        console.log(req.body);
+        properties.every(property => {
+            if(!req.body.hasOwnProperty(property)) {
+                error = `Request missing ${property} field`;
+                return false;
+            }
+            return true;
+        });
+
+        // Missing field
+        if(error != '') {
+            res.status(422).send({status: "422", message: error});
+        } else {
+            // Validate user id format
+            let validateUUID = testUUID(req.body['userId']);
+            if (!validateUUID) {
+                res.status(422).send({status: "422", message: "Invalid food id format"});
+                return;
+            }
+            
+            // Check field types and sizes
+            for (const key in req.body){
+                // String fields
+                if(key === 'name' || key === 'description' || key === 'brand' || key === 'userId') {
+                    if(typeof req.body[key] !== "string") {
+                        error = 'Field ' + key + ' has to be string';
+                        break
+                    }
+                    else if((req.body[key].length) < 1 && (key === 'name')) { // only name field can't be empty
+                        error = 'Field ' + key + " can't be an empty string";
+                        break
+                    }
+                }
+                // Number fields
+                else if(key === "calories" || key === "carbs" || key === 'protein' || key === 'fat') {
+                    if (typeof req.body[key] !== 'number') {
+                        error = 'Field ' + key + ' has to be integer'
+                        break   
+                    }
+                    else if(req.body[key] < 0) {
+                        error = 'Field ' + key + ' has to be positive'
+                        break
+                    }
+                }
+                // Boolean fields
+                else if(key === 'isPublic') {
+                    if(typeof req.body[key] !== 'boolean') {
+                        error = 'Field ' + key + ' has to be boolean'
+                        break
+                    }
+                }
+            }
+
+            if(error != '') {
+                res.status(422)
+                res.send(JSON.stringify({"status": 422, "message": error}))
+            }
+        }
+
+        await createQueryBuilder()
+        .insert()
+        .into(Food)
+        .values([{
+            name: req.body.name,
+            brand: req.body.brand,
+            description: req.body.description,
+            calories: req.body.calories,
+            carbs: req.body.carbs,
+            fat: req.body.fat,
+            protein: req.body.protein,
+            isPublic: req.body.isPublic,
+            user: req.body.userId
+
+        }])
+        .execute()
+
+        res.status(201).send({status: "201", message: "Food created"});
     })
     .put((req, res) => {
 
@@ -123,7 +216,7 @@ app.route('/food')
 
             res.status(200).send({status: "200", message: "OK"});
         } else {
-            res.status(403).send({status: 403, message: "Access denied"});
+            res.status(401).send({status: "401", message: "Access denied"});
         }
     })
 

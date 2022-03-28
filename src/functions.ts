@@ -17,7 +17,7 @@ export function authenticateJWT(req, res, next): any {
 
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decodedUser) => {
         if (error) {
-            res.status(403).send({status: 403, message: 'Access denied. Invalid token.'});
+            res.status(401).send({status: 401, message: 'Access denied. Invalid token.'});
             return;
         } else {
             req.user = decodedUser;
