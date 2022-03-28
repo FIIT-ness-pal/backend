@@ -7,8 +7,9 @@ import * as jwt from "jsonwebtoken"
 import { User } from "./entities/User";
 import { Food } from "./entities/Food";
 import { Meal } from "./entities/Meal";
+import { Log } from "./entities/Log";
 
-import { authenticateJWT, testUUID } from "./functions";
+import { authenticateJWT, checkFields, testUUID } from "./functions";
 
 var app = express();
 var port = 3000;
@@ -29,8 +30,16 @@ const dbConnect = async () => {
 dbConnect()
 
 app.get('/', (_req, res) => {
-    res.send('Hello World!');
+    res.status(200).send('Hello World!');
 });
+
+app.route('/user')
+    .put((req, res) => {
+
+    })
+    .delete((req, res) => {
+
+    })
 
 app.route('/meal')
     .get((req, res) => {
@@ -119,10 +128,67 @@ app.route('/food')
     })
 
 app.route('/log')
-    .get((req, res) => {
-
+    .get(async (req, res) => {
+        console.log("got GET on /log", req.query)
+        res.setHeader("Content-Type", "application/json")
+        const date = req.query.date
+        if(date === undefined) {
+            res.status(422).send({"status": 422, "message": "Missing date in the query parameters"})
+        }
+        else {
+            const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+            if(date.match(dateRegex) === null) {
+                res.status(422).send({"status": 422, "message": "Date should be in YYYY-MM-DD format"})
+            }
+            else {
+                const logs = await createQueryBuilder()
+                .select("log")
+                .where("log.date = :date", {date: `%${date}%`})
+                .from(Log, "log")
+                .getMany()
+                res.status(200).send({"status": 200, "message": "OK", "logs": logs})
+            }
+        }
     })
-    .post((req, res) => {
+    .post(async (req, res) => {
+        console.log("got POST on /log", req.body)
+        res.setHeader("Content-Type", "application/json")
+        // Check if any fields are missing
+        const fields = ["name", "amount", "calories", "carbs", "fat", "protein", "date", "time"]
+        const column = checkFields(req.body, fields)
+        if (column != null) {
+            res.status(422).send({"status": 422, "message": "Request is missing " + column + " field"})
+        }
+        else {
+            const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+            const timeRegex = /^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/
+            // Check date format
+            if(req.body.date.match(dateRegex) === null) {
+                res.status(422).send({"status": 422, "message": "Date should be in YYYY-MM-DD format"})
+            }
+            // Check time format
+            else if(req.body.time.match(timeRegex) == null){
+                res.status(422).send({"status": 422, "message": "Time should be in HH:MM:SS format"})
+            }
+            else {
+                await createQueryBuilder()
+                        .insert()
+                        .into(Log)
+                        .values([{
+                            name: req.body.name,
+                            amount: req.body.amount,
+                            calories: req.body.calories,
+                            carbs: req.body.carbs,
+                            fat: req.body.fat,
+                            protein: req.body.protein,
+                            date: req.body.date,
+                            time:  req.body.time,
+                            user: null    
+                        }])
+                        .execute()
+                    res.status(201).send(JSON.stringify({"status": 201, "message": "Created"}))
+            }
+        }
 
     })
     .put((req, res) => {
@@ -140,12 +206,11 @@ app.get('/meals', async (req, res) => {
     const name = req.query.name
     // There is no name parameter
     if(name === undefined) {
-        res.status(422)
-        res.send({"status": 422, "message": "Missing name in the query parameters"})
+        res.status(422).send({"status": 422, "message": "Missing name in the query parameters"})
     }
     else {
         const meals = await createQueryBuilder()
-        .select("meals")
+        .select("meal")
         .from(Meal, "meal")
         .where("meal.name like :name", { name: `%${name}%`})
         .andWhere(
@@ -156,8 +221,7 @@ app.get('/meals', async (req, res) => {
             })
         )
         .getMany()
-        res.status(200)
-        res.send({"status": 200, "message": "OK", "meals": meals})
+        res.status(200).send({"status": 200, "message": "OK", "meals": meals})
     }
 })
 
@@ -169,8 +233,7 @@ app.get('/foods', async (req, res) => {
     const name = req.query.name
     // There is no name parameter
     if(name === undefined) {
-        res.status(422)
-        res.send({"status": 422, "message": "Missing name in the query parameters"})
+        res.status(422).send({"status": 422, "message": "Missing name in the query parameters"})
     }
     else {
         const foods = await createQueryBuilder()
@@ -185,8 +248,7 @@ app.get('/foods', async (req, res) => {
             })
         )
         .getMany()
-        res.status(200)
-        res.send({"status": 200, "message": "OK", "foods": foods})
+        res.status(200).send({"status": 200, "message": "OK", "foods": foods})
     }
 })
 
@@ -195,8 +257,7 @@ app.post('/login', async (req, res) => {
     res.setHeader("Content-Type", "application/json")
     // Check if all fields are present
     if(!req.body.hasOwnProperty("email") || !req.body.hasOwnProperty("password")) {
-        res.status(422)
-        res.send({"status": 422, "message": "Email or password is missing"})
+        res.status(422).send({"status": 422, "message": "Email or password is missing"})
     }
     else {
         // Find the email
@@ -207,26 +268,22 @@ app.post('/login', async (req, res) => {
         .getOne()
         // Email was not found
         if(user === undefined) {
-            res.status(404)
-            res.send({"status": 404, "message": "User does not exist"})
+            res.status(404).send({"status": 404, "message": "User does not exist"})
         }
         else {
             // Compare the passwords
             bcrypt.compare(req.body.password, user.passwordHash, (err, result) => {
                 if(err) {
-                    res.status(500)
-                    res.send({"status": 500, "message": "Error authenticating, please try again later"})
+                    res.status(500).send({"status": 500, "message": "Error authenticating, please try again later"})
                 }
                 else {
                     if(result) {
                         // Create JWT token
                         const token = jwt.sign({"id": user.id}, process.env.ACCESS_TOKEN_SECRET)
-                        res.status(201)
-                        res.send({"status": 201, "message": "Authenticated", "accessToken": token})
+                        res.status(201).send({"status": 201, "message": "Authenticated", "accessToken": token})
                     }
                     else {
-                        res.status(401)
-                        res.send({"status": 401, "message": "Incorrect password"})
+                        res.status(401).send({"status": 401, "message": "Incorrect password"})
                     }
                 }
             })
@@ -237,20 +294,12 @@ app.post('/login', async (req, res) => {
 app.post('/register', async (req, res) => {
     console.log("got POST on /register", req.body)
     res.setHeader("Content-Type", "application/json")
-    // Check if all fields are present
-    const properties = ["firstName", "lastName", "password", "passwordConfirm", "email", "weight", "height", "birthDate", "caloriesGoal"]
     let error = ""
-    properties.every(p => {
-        if(!req.body.hasOwnProperty(p) || p.length < 2) {
-            error = "Request missing " + p + " field" 
-            return false
-        }
-        return true
-    })
-    // One or more fields missing
-    if(error != "") {
-        res.status(422)
-        res.send(JSON.stringify({"status": 422, "message": error}))
+    // Check if all fields are present
+    const fields = ["firstName", "lastName", "password", "passwordConfirm", "email", "weight", "height", "birthDate", "caloriesGoal"]
+    const field = checkFields(req.body, fields)
+    if(field != null) {
+        res.status(422).send(JSON.stringify({"status": 422, "message": "Request is missing " + field + " field"}))
     }
     else {
         // Check field types and sizes
@@ -279,14 +328,13 @@ app.post('/register', async (req, res) => {
             }
         }
         if(error !== "") {
-            res.status(422)
-            res.send(JSON.stringify({"status": 422, "message": error}))
+            res.status(422).send(JSON.stringify({"status": 422, "message": error}))
         }
         else {
             // Email regex
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
             // Allows any year and 31 days in each month
-            const birthDateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+            const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
             // Check if email is valid
             if(req.body.email.match(emailRegex) === null) {
                 error = "Email is not valid"
@@ -296,21 +344,20 @@ app.post('/register', async (req, res) => {
                 error = "Passwords don't match"
             }
             // Check date format
-            if(req.body.birthDate.match(birthDateRegex) === null && error === "") {
+            if(req.body.birthDate.match(dateRegex) === null && error === "") {
                 error = "Field birthDate should be in YYYY-MM-DD format"
             }
             if(error !== "") {
-                res.status(422)
-                res.send(JSON.stringify({"status": 422, "message": error}))
+                res.status(422).send(JSON.stringify({"status": 422, "message": error}))
             }
             else {
                 // Check if email is already taken
                 const user = await createQueryBuilder()
                 .select("user")
                 .from(User, "user")
-                .where("user.email = :email", { email: `%${req.body.email}%`})
-                .getOne()
-                if(user === undefined) {
+                .where("user.email = :email", { email: req.body.email})
+                .getManyAndCount()
+                if(user[1] === 0) {
                     // Insert user into database
                     const passwordHash = bcrypt.hashSync(req.body.password, 10)
                     await createQueryBuilder()
@@ -328,13 +375,11 @@ app.post('/register', async (req, res) => {
                             photo: ""
                         }])
                         .execute()
-                    res.status(201)
-                    res.send(JSON.stringify({"status": 201, "message": "Created"}))
+                    res.status(201).send(JSON.stringify({"status": 201, "message": "Created"}))
                 }
                 // Email is taken
                 else {
-                    res.status(422)
-                    res.send(JSON.stringify({"status": 422, "message": "Email is already taken"}))
+                    res.status(422).send(JSON.stringify({"status": 422, "message": "Email is already taken"}))
                 }
             }
         }

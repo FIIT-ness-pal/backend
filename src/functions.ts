@@ -27,3 +27,14 @@ export function authenticateJWT(req, res, next): any {
     })
 }
 
+export function checkFields(body, fields): string {
+    let missingColumn = null
+    fields.forEach(f => {
+        if(!body.hasOwnProperty(f)) {
+            missingColumn = f 
+            return false
+        }
+        return true
+    })
+    return missingColumn
+}

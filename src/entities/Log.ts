@@ -28,6 +28,9 @@ export class Log extends BaseEntity{
     @Column()
     protein: number
 
-    @Column("timestamp")
+    @Column("date")
     date: Date
+
+    @Column("time")
+    time: string
 }
