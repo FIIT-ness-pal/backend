@@ -3,7 +3,9 @@ require('dotenv').config()
 import {Brackets, createConnection, createQueryBuilder, QueryBuilder} from "typeorm";
 import * as bcrypt from "bcrypt";
 import * as express from "express";
-import * as jwt from "jsonwebtoken"
+import * as jwt from "jsonwebtoken";
+import * as multer from "multer";
+
 import { User } from "./entities/User";
 import { Food } from "./entities/Food";
 import { Meal } from "./entities/Meal";
@@ -13,6 +15,18 @@ import { authenticateJWT, checkFields, testUUID } from "./functions";
 
 var app = express();
 var port = 3000;
+
+// Multer for image storage setup
+var imageStorage = multer.diskStorage({
+    destination: function (_req, _file, cb) {
+        cb(null, 'src/images');
+    },
+    filename: function (req, file, cb) {
+        cb(null, req.user.id + '.png');
+    }
+});
+var upload = multer({storage: imageStorage});
+
 
 app.use(express.json())
 const dbConnect = async () => {
@@ -33,36 +47,54 @@ app.get('/', (_req, res) => {
     res.status(200).send('Hello World!');
 });
 
-app.get('/userPhoto', authenticateJWT, async (req, res) => {
-    console.log("got GET on /userPhoto", req.query)
-    //res.setHeader("Content-Type", "image/png");
+app.route('/userPhoto')
+    .get(authenticateJWT, async (req, res) => {
+        console.log("got GET on /userPhoto", req.query);
+        //res.setHeader("Content-Type", "image/png");
 
-    // Check if ID is missing in query parameters
-    const id = req.query.userId;
-    if(id === undefined) {
-        res.status(422).send({status: 422, message: "Missing userId in the query parameters"})
-        return
-    }
-    // Check if ID is in valid format
-    const validateUUID = testUUID(id);
-    if(!validateUUID) {
-        res.status(422).send({status: 422, message: "Invalid user id format"})
-        return
-    }
+        // Check if ID is missing in query parameters
+        const id = req.query.userId;
+        if(id === undefined) {
+            res.status(422).send({status: 422, message: "Missing userId in the query parameters"});
+            return;
+        }
+        // Check if ID is in valid format
+        const validateUUID = testUUID(id);
+        if(!validateUUID) {
+            res.status(422).send({status: 422, message: "Invalid user id format"});
+            return;
+        }
+        // Check if the user is requesting themselves
+        if(!(req.user.id === id)) {
+            res.status(401).send({status: "401", message: "Access denied"});
+        }
 
-    // Check if the user is requesting themselves
-    if(!(req.user.id === id)) {
-        res.status(401).send({status: "401", message: "Access denied"});
-    }
+        const user = await createQueryBuilder()
+        .select("user.photo")
+        .from(User, "user")
+        .where("user.id = :id", {id: id})
+        .getOne()
 
-    const user = await createQueryBuilder()
-    .select("user.photo")
-    .from(User, "user")
-    .where("user.id = :id", {id: id})
-    .getOne()
+        if(user.photo == null) {   
+            res.status(200).sendFile('images/avatar.png', {root: "./src"});
+        }
 
-    res.status(200).sendFile(user.photo, {root: "./src"});
-});
+        res.status(200).sendFile(user.photo, {root: "./src"});
+    })
+    .post(authenticateJWT, upload.single('avatar'), async (req, res) => {
+        // upload.single('avatar') -> to avarat musi byt aj key v body v postmanovi alebo name vo formulari neskor !
+        console.log("got POST on /userPhoto");
+        console.log(req.file);
+        res.setHeader("Content-Type", "application/json");
+
+        await createQueryBuilder()
+        .update(User)
+        .set({photo: 'images/' + req.file.filename})
+        .where("id = :id", {id: req.user.id})
+        .execute()
+
+        res.status(200).send({status: 200, message: "Photo uploaded"});
+    });
 
 app.route('/user')
     .put(authenticateJWT, async (req, res) => {
