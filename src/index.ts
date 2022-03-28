@@ -1,6 +1,6 @@
 require('dotenv').config()
 
-import {Brackets, createConnection, createQueryBuilder} from "typeorm";
+import {Brackets, createConnection, createQueryBuilder, QueryBuilder} from "typeorm";
 import * as bcrypt from "bcrypt";
 import * as express from "express";
 import * as jwt from "jsonwebtoken"
@@ -155,7 +155,7 @@ app.route('/food')
 
             if(error != '') {
                 res.status(422)
-                res.send(JSON.stringify({"status": 422, "message": error}))
+                res.send({status: 422, message: error})
             }
         }
 
@@ -226,22 +226,20 @@ app.route('/log')
         res.setHeader("Content-Type", "application/json")
         const date = req.query.date
         if(date === undefined) {
-            res.status(422).send({"status": 422, "message": "Missing date in the query parameters"})
+            res.status(422).send({status: 422, message: "Missing date in the query parameters"})
+            return
         }
-        else {
-            const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
-            if(date.match(dateRegex) === null) {
-                res.status(422).send({"status": 422, "message": "Date should be in YYYY-MM-DD format"})
-            }
-            else {
-                const logs = await createQueryBuilder()
-                .select("log")
-                .where("log.date = :date", {date: `%${date}%`})
-                .from(Log, "log")
-                .getMany()
-                res.status(200).send({"status": 200, "message": "OK", "logs": logs})
-            }
+        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        if(date.match(dateRegex) === null) {
+            res.status(422).send({status: 422, message: "Date should be in YYYY-MM-DD format"})
+            return
         }
+        const logs = await createQueryBuilder()
+            .select("log")
+            .where("log.date = :date", {date: `%${date}%`})
+            .from(Log, "log")
+            .getMany()
+        res.status(200).send({status: 200, message: "OK", logs: logs})
     })
     .post(async (req, res) => {
         console.log("got POST on /log", req.body)
@@ -250,45 +248,107 @@ app.route('/log')
         const fields = ["name", "amount", "calories", "carbs", "fat", "protein", "date", "time"]
         const column = checkFields(req.body, fields)
         if (column != null) {
-            res.status(422).send({"status": 422, "message": "Request is missing " + column + " field"})
+            res.status(422).send({status: 422, message: "Request is missing " + column + " field"})
+            return
         }
-        else {
-            const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
-            const timeRegex = /^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/
-            // Check date format
-            if(req.body.date.match(dateRegex) === null) {
-                res.status(422).send({"status": 422, "message": "Date should be in YYYY-MM-DD format"})
-            }
-            // Check time format
-            else if(req.body.time.match(timeRegex) == null){
-                res.status(422).send({"status": 422, "message": "Time should be in HH:MM:SS format"})
-            }
-            else {
-                await createQueryBuilder()
-                        .insert()
-                        .into(Log)
-                        .values([{
-                            name: req.body.name,
-                            amount: req.body.amount,
-                            calories: req.body.calories,
-                            carbs: req.body.carbs,
-                            fat: req.body.fat,
-                            protein: req.body.protein,
-                            date: req.body.date,
-                            time:  req.body.time,
-                            user: null    
-                        }])
-                        .execute()
-                    res.status(201).send(JSON.stringify({"status": 201, "message": "Created"}))
-            }
+        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        const timeRegex = /^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/
+        // Check date format
+        if(req.body.date.match(dateRegex) === null) {
+            res.status(422).send({status: 422, message: "Date should be in YYYY-MM-DD format"})
+            return
         }
-
+        // Check time format
+        if(req.body.time.match(timeRegex) == null){
+            res.status(422).send({status: 422, message: "Time should be in HH:MM:SS format"})
+            return
+        }
+        await createQueryBuilder()
+            .insert()
+            .into(Log)
+            .values([{
+                name: req.body.name,
+                amount: req.body.amount,
+                calories: req.body.calories,
+                carbs: req.body.carbs,
+                fat: req.body.fat,
+                protein: req.body.protein,
+                date: req.body.date,
+                time:  req.body.time,
+                user: null    
+            }])
+            .execute()
+        res.status(201).send({status: 201, message: "Created"})
     })
-    .put((req, res) => {
-
+    .put(async (req, res) => {
+        console.log("got PUT on /log", req.body)
+        res.setHeader("Content-Type", "application/json")
+        // Check if any fields are missing
+        const fields = ["id", "name", "amount", "calories", "carbs", "fat", "protein", "date", "time"]
+        const column = checkFields(req.body, fields)
+        if (column != null) {
+            res.status(422).send({status: 422, message: "Request is missing " + column + " field"})
+            return
+        }
+        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        const timeRegex = /^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/
+        // Check date format
+        if(req.body.date.match(dateRegex) === null) {
+            res.status(422).send({status: 422, message: "Date should be in YYYY-MM-DD format"})
+            return
+        }
+        // Check time format
+        if(req.body.time.match(timeRegex) == null){
+            res.status(422).send({status: 422, message: "Time should be in HH:MM:SS format"})
+            return
+        }
+        const validateUUID = testUUID(req.body.id);
+        if(!validateUUID) {
+            res.status(422).send({status: 422, message: "Invalid log id format"})
+            return
+        }
+        const logUpdate = await createQueryBuilder()
+            .update(Log)
+            .set({
+                name: req.body.name,
+                amount: req.body.amount,
+                calories: req.body.calories,
+                carbs: req.body.carbs,
+                fat: req.body.fat,
+                protein: req.body.protein,
+                date: req.body.date,
+                time:  req.body.time,
+                user: null   
+            })
+            .where("id = :id", {id: req.body.id})
+            .execute()
+        if(logUpdate.affected == 1)
+            res.status(201).send({status: 201, message: "Updated"})
+        else
+            res.status(404).send({status: 404, message: "Not found"})
     })
-    .delete((req, res) => {
-        
+    .delete(async (req, res) => {
+        console.log("got DELETe on /log", req.query)
+        res.setHeader("Content-Type", "application/json")
+        const id = req.query.id
+        if(id === undefined) {
+            res.status(422).send({status: 422, message: "Missing id in the query parameters"})
+            return
+        }
+        const validateUUID = testUUID(id);
+        if(!validateUUID) {
+            res.status(422).send({status: 422, message: "Invalid log id format"})
+            return
+        }
+        const logDelete = await createQueryBuilder()
+            .delete()
+            .from(Log)
+            .where("id = :id", {id: id})
+            .execute()
+        if(logDelete.affected == 1)
+            res.status(200).send({status: 201, message: "Deleted"})
+        else
+            res.status(404).send({status: 404, message: "Not found"})
     })
 
 app.get('/meals', async (req, res) => {
@@ -299,10 +359,10 @@ app.get('/meals', async (req, res) => {
     const name = req.query.name
     // There is no name parameter
     if(name === undefined) {
-        res.status(422).send({"status": 422, "message": "Missing name in the query parameters"})
+        res.status(422).send({status: 422, message: "Missing name in the query parameters"})
+        return
     }
-    else {
-        const meals = await createQueryBuilder()
+    const meals = await createQueryBuilder()
         .select("meal")
         .from(Meal, "meal")
         .where("meal.name like :name", { name: `%${name}%`})
@@ -314,8 +374,7 @@ app.get('/meals', async (req, res) => {
             })
         )
         .getMany()
-        res.status(200).send({"status": 200, "message": "OK", "meals": meals})
-    }
+    res.status(200).send({status: 200, message: "OK", meals: meals})
 })
 
 app.get('/foods', async (req, res) => {
@@ -326,10 +385,10 @@ app.get('/foods', async (req, res) => {
     const name = req.query.name
     // There is no name parameter
     if(name === undefined) {
-        res.status(422).send({"status": 422, "message": "Missing name in the query parameters"})
+        res.status(422).send({status: 422, message: "Missing name in the query parameters"})
+        return
     }
-    else {
-        const foods = await createQueryBuilder()
+    const foods = await createQueryBuilder()
         .select("food")
         .from(Food, "food")
         .where("food.name like :name", { name: `%${name}%`})
@@ -341,8 +400,7 @@ app.get('/foods', async (req, res) => {
             })
         )
         .getMany()
-        res.status(200).send({"status": 200, "message": "OK", "foods": foods})
-    }
+    res.status(200).send({status: 200, message: "OK", foods: foods})
 })
 
 app.post('/login', async (req, res) => {
@@ -350,38 +408,35 @@ app.post('/login', async (req, res) => {
     res.setHeader("Content-Type", "application/json")
     // Check if all fields are present
     if(!req.body.hasOwnProperty("email") || !req.body.hasOwnProperty("password")) {
-        res.status(422).send({"status": 422, "message": "Email or password is missing"})
+        res.status(422).send({status: 422, message: "Email or password is missing"})
+        return
     }
-    else {
-        // Find the email
-        const user = await createQueryBuilder()
+    // Find the email
+    const user = await createQueryBuilder()
         .select("user")
         .from(User, "user")
         .where("user.email = :email", { email: req.body.email})
         .getOne()
-        // Email was not found
-        if(user === undefined) {
-            res.status(404).send({"status": 404, "message": "User does not exist"})
-        }
-        else {
-            // Compare the passwords
-            bcrypt.compare(req.body.password, user.passwordHash, (err, result) => {
-                if(err) {
-                    res.status(500).send({"status": 500, "message": "Error authenticating, please try again later"})
-                }
-                else {
-                    if(result) {
-                        // Create JWT token
-                        const token = jwt.sign({"id": user.id}, process.env.ACCESS_TOKEN_SECRET)
-                        res.status(201).send({"status": 201, "message": "Authenticated", "accessToken": token})
-                    }
-                    else {
-                        res.status(401).send({"status": 401, "message": "Incorrect password"})
-                    }
-                }
-            })
-        }
+    // Email was not found
+    if(user === undefined) {
+        res.status(404).send({status: 404, message: "User does not exist"})
+        return 
     }
+    // Compare the passwords
+    bcrypt.compare(req.body.password, user.passwordHash, (err, result) => {
+        if(err) {
+            res.status(500).send({status: 500, message: "Error authenticating, please try again later"})
+            return
+        }
+        if(result) {
+            // Create JWT token
+            const token = jwt.sign({id: user.id}, process.env.ACCESS_TOKEN_SECRET)
+            res.status(201).send({status: 201, message: "Authenticated", accessToken: token})
+        } 
+        else {
+            res.status(401).send({status: 401, message: "Incorrect password"})
+        }
+    })
 })
 
 app.post('/register', async (req, res) => {
@@ -392,91 +447,92 @@ app.post('/register', async (req, res) => {
     const fields = ["firstName", "lastName", "password", "passwordConfirm", "email", "weight", "height", "birthDate", "caloriesGoal"]
     const field = checkFields(req.body, fields)
     if(field != null) {
-        res.status(422).send(JSON.stringify({"status": 422, "message": "Request is missing " + field + " field"}))
+        res.status(422).send({status: 422, message: "Request is missing " + field + " field"})
+        return
     }
+    
+    // Check field types and sizes
+    for (const key in req.body){
+        // String fields
+        if((key === "firstName" || key === "lastName" || key === "password" || key === "passwordConfirm" || key === "birthDate")) {
+            if(typeof req.body[key] !== "string") {
+                error = "Field " + key + " has to be string"
+                break
+            }
+            else if(req.body[key].length < 1) {
+                error = "Field " + key + " can't be an empty string"
+                break
+            }
+        }
+        // Number fields
+        else if((key === "weight" || key === "height" || key === "caloriesGoal")) {
+            if (typeof req.body[key] !== "number") {
+                error = "Field " + key + " has to be integer"
+                break   
+            }
+            else if(req.body[key] < 0) {
+                error = "Field " + key + " has to be positive"
+                break
+            }
+        }
+    }
+    if(error !== "") {
+        res.status(422).send({status: 422, message: error})
+        return
+    }
+    
+    // Email regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    // Allows any year and 31 days in each month
+    const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+    // Check if email is valid
+    if(req.body.email.match(emailRegex) === null) {
+        error = "Email is not valid"
+    }
+    // Compare passwords
+    if(req.body.password !== req.body.passwordConfirm && error === "") {
+        error = "Passwords don't match"
+    }
+    // Check date format
+    if(req.body.birthDate.match(dateRegex) === null && error === "") {
+        error = "Field birthDate should be in YYYY-MM-DD format"
+    }
+    if(error !== "") {
+        res.status(422).send({status: 422, message: error})
+        return
+    }
+    // Check if email is already taken
+    const user = await createQueryBuilder()
+        .select("user")
+        .from(User, "user")
+        .where("user.email = :email", { email: req.body.email})
+        .getManyAndCount()
+    if(user[1] === 0) {
+        // Insert user into database
+        const passwordHash = bcrypt.hashSync(req.body.password, 10)
+        await createQueryBuilder()
+            .insert()
+            .into(User)
+            .values([{
+                firstName: req.body.firstName,
+                lastName: req.body.lastName,
+                passwordHash: passwordHash,
+                email: req.body.email,
+                weight: req.body.weight,
+                height: req.body.height,
+                birthDate: req.body.birthDate,
+                caloriesGoal:  req.body.caloriesGoal,
+                photo: ""
+            }])
+            .execute()
+        res.status(201).send({status: 201, message: "Created"})
+    }
+    // Email is taken
     else {
-        // Check field types and sizes
-        for (const key in req.body){
-            // String fields
-            if((key === "firstName" || key === "lastName" || key === "password" || key === "passwordConfirm" || key === "birthDate")) {
-                if(typeof req.body[key] !== "string") {
-                    error = "Field " + key + " has to be string"
-                    break
-                }
-                else if(req.body[key].length < 1) {
-                    error = "Field " + key + " can't be an empty string"
-                    break
-                }
-            }
-            // Number fields
-            else if((key === "weight" || key === "height" || key === "caloriesGoal")) {
-                if (typeof req.body[key] !== "number") {
-                    error = "Field " + key + " has to be integer"
-                    break   
-                }
-                else if(req.body[key] < 0) {
-                    error = "Field " + key + " has to be positive"
-                    break
-                }
-            }
-        }
-        if(error !== "") {
-            res.status(422).send(JSON.stringify({"status": 422, "message": error}))
-        }
-        else {
-            // Email regex
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-            // Allows any year and 31 days in each month
-            const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
-            // Check if email is valid
-            if(req.body.email.match(emailRegex) === null) {
-                error = "Email is not valid"
-            }
-            // Compare passwords
-            if(req.body.password !== req.body.passwordConfirm && error === "") {
-                error = "Passwords don't match"
-            }
-            // Check date format
-            if(req.body.birthDate.match(dateRegex) === null && error === "") {
-                error = "Field birthDate should be in YYYY-MM-DD format"
-            }
-            if(error !== "") {
-                res.status(422).send(JSON.stringify({"status": 422, "message": error}))
-            }
-            else {
-                // Check if email is already taken
-                const user = await createQueryBuilder()
-                .select("user")
-                .from(User, "user")
-                .where("user.email = :email", { email: req.body.email})
-                .getManyAndCount()
-                if(user[1] === 0) {
-                    // Insert user into database
-                    const passwordHash = bcrypt.hashSync(req.body.password, 10)
-                    await createQueryBuilder()
-                        .insert()
-                        .into(User)
-                        .values([{
-                            firstName: req.body.firstName,
-                            lastName: req.body.lastName,
-                            passwordHash: passwordHash,
-                            email: req.body.email,
-                            weight: req.body.weight,
-                            height: req.body.height,
-                            birthDate: req.body.birthDate,
-                            caloriesGoal:  req.body.caloriesGoal,
-                            photo: ""
-                        }])
-                        .execute()
-                    res.status(201).send(JSON.stringify({"status": 201, "message": "Created"}))
-                }
-                // Email is taken
-                else {
-                    res.status(422).send(JSON.stringify({"status": 422, "message": "Email is already taken"}))
-                }
-            }
-        }
+        res.status(422).send({status: 422, message: "Email is already taken"})
     }
+    
+    
 })
 
 app.listen(port, () => {
