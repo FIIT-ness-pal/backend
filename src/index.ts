@@ -33,6 +33,37 @@ app.get('/', (_req, res) => {
     res.status(200).send('Hello World!');
 });
 
+app.get('/userPhoto', authenticateJWT, async (req, res) => {
+    console.log("got GET on /userPhoto", req.query)
+    //res.setHeader("Content-Type", "image/png");
+
+    // Check if ID is missing in query parameters
+    const id = req.query.userId;
+    if(id === undefined) {
+        res.status(422).send({status: 422, message: "Missing userId in the query parameters"})
+        return
+    }
+    // Check if ID is in valid format
+    const validateUUID = testUUID(id);
+    if(!validateUUID) {
+        res.status(422).send({status: 422, message: "Invalid user id format"})
+        return
+    }
+
+    // Check if the user is requesting themselves
+    if(!(req.user.id === id)) {
+        res.status(401).send({status: "401", message: "Access denied"});
+    }
+
+    const user = await createQueryBuilder()
+    .select("user.photo")
+    .from(User, "user")
+    .where("user.id = :id", {id: id})
+    .getOne()
+
+    res.status(200).sendFile(user.photo, {root: "./src"});
+});
+
 app.route('/user')
     .put(authenticateJWT, async (req, res) => {
         console.log("got PUT on /user", req.body)
@@ -160,10 +191,11 @@ app.route('/user')
     .get(authenticateJWT, async (req, res) => {
         console.log("got GET on /user", req.query)
         res.setHeader("Content-Type", "application/json")
+        
         // Check if ID is missing in query parameters
-        const id = req.query.id
+        const id = req.query.userId
         if(id === undefined) {
-            res.status(422).send({status: 422, message: "Missing id in the query parameters"})
+            res.status(422).send({status: 422, message: "Missing userId in the query parameters"})
             return
         }
         // Check if ID is in valid format
