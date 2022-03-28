@@ -34,11 +34,128 @@ app.get('/', (_req, res) => {
 });
 
 app.route('/user')
-    .put((req, res) => {
-
+    .put(authenticateJWT, async (req, res) => {
+        console.log("got PUT on /user", req.body)
+        res.setHeader("Content-Type", "application/json")
+        // Check if any fields are missing
+        const fields = ["id", "email", "firstName", "lastName", "weight", "height", "birthday", "caloriesGoal"]
+        const field = checkFields(req.body, fields)
+        if (field != null) {
+            res.status(422).send({status: 422, message: "Request is missing " + field + " field"})
+            return
+        }
+        let error = ""
+        for (const key in req.body){
+            // String fields
+            if((key === "firstName" || key === "lastName" || key === "password" || key === "passwordConfirm" || key === "birthDate")) {
+                if(typeof req.body[key] !== "string") {
+                    error = "Field " + key + " has to be string"
+                    break
+                }
+                else if(req.body[key].length < 1) {
+                    error = "Field " + key + " can't be an empty string"
+                    break
+                }
+            }
+            // Number fields
+            else if((key === "weight" || key === "height" || key === "caloriesGoal")) {
+                if (typeof req.body[key] !== "number") {
+                    error = "Field " + key + " has to be integer"
+                    break   
+                }
+                else if(req.body[key] < 0) {
+                    error = "Field " + key + " has to be positive"
+                    break
+                }
+            }
+        }
+        if(error !== "") {
+            res.status(422).send({status: 422, message: error})
+            return
+        }
+        // Email regex
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        // Allows any year and 31 days in each month
+        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        // Check if email is valid
+        if(req.body.email.match(emailRegex) === null) {
+            error = "Email is not valid"
+        }
+        // Compare passwords
+        if(req.body.password !== req.body.passwordConfirm && error === "") {
+            error = "Passwords don't match"
+        }
+        // Check date format
+        if(req.body.birthDate.match(dateRegex) === null && error === "") {
+            error = "Field birthDate should be in YYYY-MM-DD format"
+        }
+        if(error !== "") {
+            res.status(422).send({status: 422, message: error})
+            return
+        }
+        // Check if email is already taken
+        const user = await createQueryBuilder()
+            .select("user")
+            .from(User, "user")
+            .where("user.email = :email", { email: req.body.email})
+            .getManyAndCount()
+        if(user[1] === 0) {
+            if(req.user.id === req.body.id) {
+                await createQueryBuilder()
+                .update(User)
+                .set({
+                    firstName: req.body.firstName,
+                    lastName: req.body.lastName,
+                    email: req.body.email,
+                    weight: req.body.weight,
+                    height: req.body.height,
+                    birthDate: req.body.birthDate,
+                    caloriesGoal:  req.body.caloriesGoal
+                })
+                .where("id = :id", {id: req.user.id})
+                .execute()
+                res.status(201).send({status: 201, message: "Created"})
+            }
+            else {
+                res.status(401).send({status: 401, message: "Access denied"})
+            }
+        }
+        // Email is taken
+        else {
+            res.status(422).send({status: 422, message: "Email is already taken"})
+        }
     })
-    .delete((req, res) => {
-
+    .delete(authenticateJWT, async (req, res) => {
+        console.log('got DELETE on /user', req.query)
+        res.setHeader('Content-Type', 'application/json')
+        // Check if ID is missing in query parameters
+        const id = req.query.id
+        if(id === undefined) {
+            res.status(422).send({status: 422, message: "Missing id in the query parameters"})
+            return
+        }
+        // Check if ID is in valid format
+        const validateUUID = testUUID(id);
+        if(!validateUUID) {
+            res.status(422).send({status: 422, message: "Invalid user id format"})
+            return
+        }
+        // Check if the user is deleting themselves
+        if(req.user.id === id) {
+            const userDelete = await createQueryBuilder()
+            .delete()
+            .from(User)
+            .where("id = :id", {id: id})
+            .execute()
+            if(userDelete.affected == 1)
+                res.status(200).send({status: 201, message: "Deleted"})
+            else
+                res.status(404).send({status: 404, message: "Not found"})
+        }
+        else {
+            res.status(401).send({status: 401, message: "Access denied"})
+        }
+        
     })
 
 app.route('/meal')
@@ -522,7 +639,7 @@ app.post('/register', async (req, res) => {
                 height: req.body.height,
                 birthDate: req.body.birthDate,
                 caloriesGoal:  req.body.caloriesGoal,
-                photo: ""
+                photo: "images/avatar.png"
             }])
             .execute()
         res.status(201).send({status: 201, message: "Created"})
