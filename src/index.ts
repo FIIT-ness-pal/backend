@@ -157,6 +157,41 @@ app.route('/user')
         }
         
     })
+    .get(authenticateJWT, async (req, res) => {
+        console.log("got GET on /user", req.query)
+        res.setHeader("Content-Type", "application/json")
+        // Check if ID is missing in query parameters
+        const id = req.query.id
+        if(id === undefined) {
+            res.status(422).send({status: 422, message: "Missing id in the query parameters"})
+            return
+        }
+        // Check if ID is in valid format
+        const validateUUID = testUUID(id);
+        if(!validateUUID) {
+            res.status(422).send({status: 422, message: "Invalid user id format"})
+            return
+        }
+
+        // Check if the user is requesting themselves
+        if(!(req.user.id === id)) {
+            res.status(401).send({status: "401", message: "Access denied"});
+        }
+
+
+        const user = await createQueryBuilder()
+        .select("user")
+        .from(User, "user")
+        .where("user.id = :id", {id: id})
+        .getOne()
+
+        if(user !== undefined) {
+            delete user.photo;
+            res.status(200).send({status: 200, message: user})
+        } else {
+            res.status(404).send({status: 404, message: "Not found"})
+        }
+    })
 
 app.route('/meal')
     .get((req, res) => {
