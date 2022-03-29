@@ -279,10 +279,11 @@ app.route('/meal')
             .select("meal")
             .from(Meal, "meal")
             .where("meal.id = :id", {id: mealId})
-            .leftJoinAndSelect("meal.foods", "food")
+            .leftJoinAndSelect("meal.ingredients", "ingredient")
+            .leftJoinAndSelect("ingredient.food", "food")
             .getOne();
 
-            console.log(meal);
+            res.send({status: "200", meal: meal});
         }
     })
     .post((req, res) => {
@@ -292,7 +293,7 @@ app.route('/meal')
 
     })
     .delete((req, res) => {
-
+        
     })
 
 app.route('/food')
