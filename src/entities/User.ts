@@ -7,7 +7,7 @@ import { Meal } from "./Meal"
 export class User extends BaseEntity{
 
     @PrimaryGeneratedColumn("uuid")
-    id: number;
+    id: string;
 
     @Column()
     firstName: string;
