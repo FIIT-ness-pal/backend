@@ -21,7 +21,7 @@ var imageStorage = multer.diskStorage({
     destination: function (_req, _file, cb) {
         cb(null, 'src/images');
     },
-    filename: function (req, file, cb) {
+    filename: function (req, _file, cb) {
         cb(null, req.user.id + '.png');
     }
 });
@@ -82,7 +82,7 @@ app.route('/userPhoto')
         res.status(200).sendFile(user.photo, {root: "./src"});
     })
     .post(authenticateJWT, upload.single('avatar'), async (req, res) => {
-        // upload.single('avatar') -> to avarat musi byt aj key v body v postmanovi alebo name vo formulari neskor !
+        // upload.single('avatar') -> to avatar musi byt ako key v body v postmanovi alebo name vo formulari neskor !
         console.log("got POST on /userPhoto");
         console.log(req.file);
         res.setHeader("Content-Type", "application/json");
