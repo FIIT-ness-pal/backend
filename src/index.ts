@@ -11,7 +11,7 @@ import { Food } from "./entities/Food";
 import { Meal } from "./entities/Meal";
 import { Log } from "./entities/Log";
 
-import { authenticateJWT, checkFields, testUUID } from "./functions";
+import { authenticateJWT, checkFields, checkFieldTypes, testUUID } from "./functions";
 
 var app = express();
 var port = 3000;
@@ -592,7 +592,12 @@ app.route('/log')
             res.status(422).send({status: 422, message: "Time should be in HH:MM:SS format"})
             return
         }
-        
+        // Check field types and sizes
+        const result = checkFieldTypes(req.body, ["name", "date", "time"], ["amount", "calories", "carbs", "fat", "protein"])
+        if(result != null) {
+            res.status(422).send(result)
+            return
+        }
         await createQueryBuilder()
             .insert()
             .into(Log)
@@ -610,7 +615,7 @@ app.route('/log')
             .execute()
         res.status(201).send({status: 201, message: "Created"})
     })
-    .put(async (req, res) => {
+    .put(authenticateJWT, async (req, res) => {
         console.log("got PUT on /log", req.body)
         res.setHeader("Content-Type", "application/json")
         // Check if any fields are missing
@@ -618,6 +623,11 @@ app.route('/log')
         const column = checkFields(req.body, fields)
         if (column != null) {
             res.status(422).send({status: 422, message: "Request is missing " + column + " field"})
+            return
+        }
+        const result = checkFieldTypes(req.body, ["id", "name", "date", "time"], ["amount", "calories", "carbs", "fat", "protein"])
+        if(result != null) {
+            res.status(422).send(result)
             return
         }
         const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
@@ -632,11 +642,25 @@ app.route('/log')
             res.status(422).send({status: 422, message: "Time should be in HH:MM:SS format"})
             return
         }
+        // Validate UUID format
         const validateUUID = testUUID(req.body.id);
         if(!validateUUID) {
             res.status(422).send({status: 422, message: "Invalid log id format"})
             return
         }
+        console.log(req.user.id)
+        // Check if user owns the log
+        const logSelect = await createQueryBuilder()
+            .select("log")
+            .where("log.id = :id", {id: req.body.id})
+            .andWhere("log.user = :userId", {userId: req.user.id})
+            .from(Log, "log")
+            .getOne()
+        if(logSelect === undefined) {
+            res.status(404).send({status: 404, message: "Log not found"})
+            return
+        }
+        // Update the log
         const logUpdate = await createQueryBuilder()
             .update(Log)
             .set({
@@ -648,12 +672,14 @@ app.route('/log')
                 protein: req.body.protein,
                 date: req.body.date,
                 time:  req.body.time,
-                user: null   
+                user: req.user.id   
             })
             .where("id = :id", {id: req.body.id})
             .execute()
+        // SUccesfully updated
         if(logUpdate.affected == 1)
             res.status(201).send({status: 201, message: "Updated"})
+        // No log with that id
         else
             res.status(404).send({status: 404, message: "Not found"})
     })

@@ -38,3 +38,28 @@ export function checkFields(body, fields): string {
     })
     return missingColumn
 }
+
+export function checkFieldTypes(body, stringFields, numberFields): object {
+    // Check field types and sizes
+    for (const key in body){
+        // String fields
+        if(stringFields.includes(key)) {
+            if(typeof body[key] !== "string") {
+                return {status: 422, message: `Field ${key} must be a string`}
+            }
+            else if(body[key].length < 1) {
+                return {status: 422, message: `Field ${key} must be at least 1 character long`}
+            }
+        }
+        // Number fields
+        if(numberFields.includes(key)) {
+            if(typeof body[key] !== "number") {
+                return {status: 422, message: `Field ${key} must be a number`}
+            }
+            else if(body[key] < 0) {
+                return {status: 422, message: `Field ${key} must be positive`}
+            }
+        }
+    }
+    return null
+}
