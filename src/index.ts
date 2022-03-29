@@ -279,11 +279,22 @@ app.route('/meal')
             .select("meal")
             .from(Meal, "meal")
             .where("meal.id = :id", {id: mealId})
+            .leftJoinAndSelect("meal.user", "user")
             .leftJoinAndSelect("meal.ingredients", "ingredient")
             .leftJoinAndSelect("ingredient.food", "food")
             .getOne();
 
-            res.send({status: "200", meal: meal});
+            if(meal == null) { // Food doesn't exist
+                res.status(404).send({status: "404", message: "Food not found"});
+            } else if(meal.user == null) { // Meal has no owner
+                delete meal.user;
+                res.status(200).send({status: "200", meal: meal});
+            } else if((meal.user.id === req.user.id) || meal.isPublic) { // If the user who requesting the meal is the owner or if the meal is public
+                delete meal.user;
+                res.status(200).send({status: "200", meal: meal});
+            } else { // The meal exists but the user doesn't have access to it
+                res.status(401).send({status: "401", message: "Access denied"});
+            }
         }
     })
     .post((req, res) => {
@@ -292,8 +303,52 @@ app.route('/meal')
     .put((req, res) => {
 
     })
-    .delete((req, res) => {
-        
+    .delete(authenticateJWT, async (req, res) => {
+        console.log('got GET on /food', req.query);
+        res.setHeader('Content-Type', 'application/json');
+
+        let mealId = req.query.id;
+
+        if(!mealId) {
+            res.status(422).send({status: "422", message: "Missing food id parameter"});
+            return;
+        } else {
+            // validate food id format
+            let validateUUID = testUUID(mealId);
+            if (!validateUUID) {
+                res.status(422).send({status: "422", message: "Invalid food id format"});
+                return;
+            }
+        }
+
+        let meal = await createQueryBuilder()
+        .select("meal")
+        .from(Meal, "meal")
+        .where("meal.id = :id", {id: mealId})
+        .leftJoinAndSelect("meal.user", "user")
+        .leftJoinAndSelect("meal.ingredients", "ingredient")
+        .leftJoinAndSelect("ingredient.food", "food")
+        .getOne();
+
+        // Meal has no owner -> nobody can delete it
+        if(meal.user === null) {
+            res.status(401).send({status: "401", message: "Access denied"});
+            return;
+        }
+
+        // Check if the user created this food
+        if(meal.user.id === meal.user.id) {
+            await createQueryBuilder()
+            .delete()
+            .from(Meal, "meal")
+            .where("meal.id = :id", {id: mealId})
+            .execute();
+
+            res.status(200).send({status: "200", message: "OK"});
+        } 
+        else {
+            res.status(401).send({status: "401", message: "Access denied"});
+        }
     })
 
 app.route('/food')

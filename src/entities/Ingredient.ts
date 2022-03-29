@@ -7,10 +7,10 @@ export class Ingredient extends BaseEntity{
     @PrimaryGeneratedColumn("uuid")
     id: number
 
-    @ManyToOne(() => Food, food => food.ingredients)
+    @ManyToOne(() => Food, food => food.ingredients, { onDelete: "CASCADE" })
     food: Food
 
-    @ManyToOne(() => Meal, meal => meal.ingredients)
+    @ManyToOne(() => Meal, meal => meal.ingredients, { onDelete: "CASCADE" })
     meal: Meal
 
     @Column()
