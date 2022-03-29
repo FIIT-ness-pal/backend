@@ -5,7 +5,7 @@ import { Meal } from "./Meal";
 @Entity()
 export class Ingredient extends BaseEntity{
     @PrimaryGeneratedColumn("uuid")
-    id: number
+    id: string
 
     @ManyToOne(() => Food, food => food.ingredients, { onDelete: 'CASCADE' })
     food: Food

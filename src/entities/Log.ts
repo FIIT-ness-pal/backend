@@ -5,7 +5,7 @@ import { User } from "./User";
 export class Log extends BaseEntity{
 
     @PrimaryGeneratedColumn("uuid")
-    id: number;
+    id: string;
 
     @ManyToOne(() => User, user => user.logs, { onDelete: 'CASCADE' })
     user: User

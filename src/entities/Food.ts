@@ -6,9 +6,9 @@ import {User} from "./User"
 export class Food extends BaseEntity{
 
     @PrimaryGeneratedColumn("uuid")
-    id: number;
+    id: string;
 
-    @ManyToOne(() => User, user => user.foods)
+    @ManyToOne(() => User, user => user.foods, { onDelete: 'CASCADE' })
     user: User;
 
     @Column()
@@ -24,16 +24,16 @@ export class Food extends BaseEntity{
     })
     description: string
 
-    @Column()
+    @Column("float")
     calories: number
 
-    @Column()
+    @Column("float")
     carbs: number
 
-    @Column()
+    @Column("float")
     fat: number
 
-    @Column()
+    @Column("float")
     protein: number
 
     @Column()

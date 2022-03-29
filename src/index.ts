@@ -674,7 +674,7 @@ app.route('/log')
         else
             res.status(404).send({status: 404, message: "Not found"})
     })
-    .delete(async (req, res) => {
+    .delete(authenticateJWT, async (req, res) => {
         console.log("got DELETe on /log", req.query)
         res.setHeader("Content-Type", "application/json")
         // Check if any fields are missing
