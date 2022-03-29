@@ -624,17 +624,6 @@ app.route('/log')
             return
         }
         console.log(req.user.id)
-        // Check if user owns the log
-        const logSelect = await createQueryBuilder()
-            .select("log")
-            .where("log.id = :id", {id: req.body.id})
-            .andWhere("log.user = :userId", {userId: req.user.id})
-            .from(Log, "log")
-            .getOne()
-        if(logSelect === undefined) {
-            res.status(404).send({status: 404, message: "Log not found"})
-            return
-        }
         // Update the log
         const logUpdate = await createQueryBuilder()
             .update(Log)
@@ -650,6 +639,7 @@ app.route('/log')
                 user: req.user.id   
             })
             .where("id = :id", {id: req.body.id})
+            .andWhere("user = :userId", {userId: req.user.id})
             .execute()
         // SUccesfully updated
         if(logUpdate.affected == 1)
@@ -661,23 +651,29 @@ app.route('/log')
     .delete(async (req, res) => {
         console.log("got DELETe on /log", req.query)
         res.setHeader("Content-Type", "application/json")
+        // Check if any fields are missing
         const id = req.query.id
         if(id === undefined) {
             res.status(422).send({status: 422, message: "Missing id in the query parameters"})
             return
         }
+        // Validate UUID format
         const validateUUID = testUUID(id);
         if(!validateUUID) {
             res.status(422).send({status: 422, message: "Invalid log id format"})
             return
         }
+        // Delete the log
         const logDelete = await createQueryBuilder()
             .delete()
             .from(Log)
             .where("id = :id", {id: id})
+            .andWhere("user = :userId", {userId: req.user.id})
             .execute()
+        // Succesfully deleted
         if(logDelete.affected == 1)
             res.status(200).send({status: 201, message: "Deleted"})
+        // No log with that id
         else
             res.status(404).send({status: 404, message: "Not found"})
     })
