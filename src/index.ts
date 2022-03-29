@@ -258,8 +258,33 @@ app.route('/user')
     })
 
 app.route('/meal')
-    .get((req, res) => {
+    .get(authenticateJWT, async (req, res) => {
+        console.log('got GET on /food', req.query);
+        res.setHeader('Content-Type', 'application/json');
 
+        let mealId = req.query.id;
+
+        if(!mealId) {
+            res.status(422).send({status: "422", message: "Missing meal id parameter"});
+            return;
+        } else {
+            // Validate food id format
+            let validateUUID = testUUID(mealId);
+            if (!validateUUID) {
+                res.status(422).send({status: "422", message: "Invalid meal id format"});
+                return;
+            }
+
+            let meal = await createQueryBuilder()
+            .select("meal")
+            .from(Meal, "meal")
+            .where("meal.id = :id", {id: mealId})
+            .leftJoinAndSelect("meal.ingredients", "ingredient")
+            .leftJoinAndSelect("ingredient.food", "food")
+            .getOne();
+
+            res.send({status: "200", meal: meal});
+        }
     })
     .post((req, res) => {
 
@@ -268,7 +293,7 @@ app.route('/meal')
 
     })
     .delete((req, res) => {
-
+        
     })
 
 app.route('/food')
@@ -280,6 +305,7 @@ app.route('/food')
 
         if (!foodId) {
             res.status(422).send({status: "422", message: "Missing food id parameter"});
+            return;
         } else {
             // Validate food id format
             let validateUUID = testUUID(foodId);
