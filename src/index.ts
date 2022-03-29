@@ -51,12 +51,11 @@ app.get('/', (_req, res) => {
 app.route('/userPhoto')
     .get(authenticateJWT, async (req, res) => {
         console.log("got GET on /userPhoto", req.query);
-        //res.setHeader("Content-Type", "image/png");
 
         // Check if ID is missing in query parameters
-        const id = req.query.userId;
+        const id = req.query.id;
         if(id === undefined) {
-            res.status(422).send({status: 422, message: "Missing userId in the query parameters"});
+            res.status(422).send({status: 422, message: "Missing id in the query parameters"});
             return;
         }
         // Check if ID is in valid format
@@ -68,16 +67,18 @@ app.route('/userPhoto')
         // Check if the user is requesting themselves
         if(!(req.user.id === id)) {
             res.status(401).send({status: "401", message: "Access denied"});
+            return
         }
 
         const user = await createQueryBuilder()
-        .select("user.photo")
-        .from(User, "user")
-        .where("user.id = :id", {id: id})
-        .getOne()
+            .select("user.photo")
+            .from(User, "user")
+            .where("user.id = :id", {id: id})
+            .getOne()
 
         if(user.photo == null) {   
             res.status(200).sendFile('images/avatar.png', {root: "./src"});
+            return
         }
 
         res.status(200).sendFile(user.photo, {root: "./src"});
@@ -87,7 +88,11 @@ app.route('/userPhoto')
         console.log("got POST on /userPhoto");
         console.log(req.file);
         res.setHeader("Content-Type", "application/json");
-
+        // Check if body contains file
+        if(req.file === undefined) {
+            res.status(422).send({status: 422, message: "Missing file in the body"});
+            return;
+        }
         await createQueryBuilder()
         .update(User)
         .set({photo: 'images/' + req.file.filename})
