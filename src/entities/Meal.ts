@@ -35,6 +35,6 @@ export class Meal extends BaseEntity{
     @Column()
     isPublic: boolean
 
-    @OneToMany(() => Ingredient, ingredient => ingredient.meal)
+    @OneToMany(() => Ingredient, ingredient => ingredient.meal, { cascade: ["insert"] })
     ingredients: Ingredient[]
 }

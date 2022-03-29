@@ -12,6 +12,7 @@ import { Meal } from "./entities/Meal";
 import { Log } from "./entities/Log";
 
 import { authenticateJWT, checkFields, checkFieldTypes, testUUID } from "./functions";
+import { Ingredient } from "./entities/Ingredient";
 
 var app = express();
 var port = 3000;
@@ -297,8 +298,85 @@ app.route('/meal')
             }
         }
     })
-    .post((req, res) => {
+    .post(authenticateJWT, async (req, res) => {
+        console.log('got POST on /food', req.query);
+        res.setHeader("Content-Type", "application/json");
 
+        const properties = ['name', 'description', 'calories', 'carbs', 'protein', 'fat', 'isPublic', 'ingredients'];
+        const subProperties = ['id', 'amount'];
+        let error = "";
+
+        // Check missing fields in request body
+        let missingColumn = checkFields(req.body, properties);
+        let missingIngredientsColumn;
+        for(let i = 0; i < req.body.ingredients.length; i++) {
+            missingIngredientsColumn = checkFields(req.body.ingredients[i], subProperties);
+        }
+
+        if((missingColumn !== null) || (missingIngredientsColumn !== null)) {
+            res.status(422).send({status: "422", message: "Missing " + missingColumn + " or " + missingIngredientsColumn});
+            return;
+        } else {
+            // Check field data types
+            let result = checkFieldTypes(req.body, ['name', 'description'], ['calories', 'carbs', 'protein', 'fat']);
+            if(result != null) {
+                res.status(422).send(result);
+                return;
+            }
+            for(let i = 0; i < req.body.ingredients.length; i++) {
+                let result = checkFieldTypes(req.body.ingredients[i], ['id'], ['amount']);
+                if(result != null) {
+                    res.status(422).send(result);
+                    return;
+                }
+
+                let validateUUID = testUUID(req.body.ingredients[i].id);
+                if (!validateUUID) {
+                    res.status(422).send({status: "422", message: "Invalid ingredient id format"});
+                    return;
+                }
+
+            }
+        }
+
+        let ingredients = [];
+        for(let i = 0; i < req.body.ingredients.length; i++) {
+            ingredients.push({
+                food: req.body.ingredients[i].id,
+                foodAmount: req.body.ingredients[i].amount
+            });
+        }
+
+        let insert = await createQueryBuilder()
+        .insert()
+        .into(Meal)
+        .values({
+            name: req.body.name,
+            description: req.body.description,
+            calories: req.body.calories,
+            carbs: req.body.carbs,
+            protein: req.body.protein,
+            fat: req.body.fat,
+            isPublic: req.body.isPublic,
+            user: req.user.id
+        })
+        .execute()
+
+        let mealId = insert.identifiers[0].id;
+
+        for(let i = 0; i < ingredients.length; i++) {
+            await createQueryBuilder()
+            .insert()
+            .into(Ingredient)
+            .values({
+                meal: mealId,
+                food: ingredients[i].food,
+                foodAmount: ingredients[i].foodAmount
+            })
+            .execute()
+        }
+
+        res.status(201).send({status: "201", message: "Meal created"});
     })
     .put((req, res) => {
 
