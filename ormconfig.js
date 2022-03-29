@@ -10,16 +10,16 @@ module.exports = {
     "synchronize": true,
     "logging": false,
     "entities": [
-       "src/entities/**/*.ts"
+       "src/entities/**/*.{js,ts}"
     ],
     "migrations": [
-       "src/migrations/**/*.ts"
+       "src/migrations/**/*.{js,ts}"
     ],
     "subscribers": [
-       "src/subscribers/**/*.ts"
+       "src/subscribers/**/*.{js,ts}"
     ],
     "seeds": [
-       'src/seeds/**/*.ts'
+       'src/seeds/**/*.{js,ts}'
     ],
     "cli": {
        "entitiesDir": "src/entities",
