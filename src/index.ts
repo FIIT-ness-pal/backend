@@ -1,6 +1,6 @@
 require('dotenv').config()
 
-import {Brackets, createConnection, createQueryBuilder, QueryBuilder} from "typeorm";
+import {Brackets, createConnection, createQueryBuilder} from "typeorm";
 import * as bcrypt from "bcrypt";
 import * as express from "express";
 import * as jwt from "jsonwebtoken";
@@ -102,39 +102,17 @@ app.route('/user')
         console.log("got PUT on /user", req.body)
         res.setHeader("Content-Type", "application/json")
         // Check if any fields are missing
-        const fields = ["id", "email", "firstName", "lastName", "weight", "height", "birthday", "caloriesGoal"]
+        const fields = ["email", "firstName", "lastName", "password", "passwordConfirm", "weight", "height", "birthDate", "caloriesGoal"]
         const field = checkFields(req.body, fields)
         if (field != null) {
             res.status(422).send({status: 422, message: "Request is missing " + field + " field"})
             return
         }
         let error = ""
-        for (const key in req.body){
-            // String fields
-            if((key === "firstName" || key === "lastName" || key === "password" || key === "passwordConfirm" || key === "birthDate")) {
-                if(typeof req.body[key] !== "string") {
-                    error = "Field " + key + " has to be string"
-                    break
-                }
-                else if(req.body[key].length < 1) {
-                    error = "Field " + key + " can't be an empty string"
-                    break
-                }
-            }
-            // Number fields
-            else if((key === "weight" || key === "height" || key === "caloriesGoal")) {
-                if (typeof req.body[key] !== "number") {
-                    error = "Field " + key + " has to be integer"
-                    break   
-                }
-                else if(req.body[key] < 0) {
-                    error = "Field " + key + " has to be positive"
-                    break
-                }
-            }
-        }
-        if(error !== "") {
-            res.status(422).send({status: 422, message: error})
+        // Check field types and sizes
+        const result = checkFieldTypes(req.body, ["firstName", "lastName", "password", "passwordConfirm", "birthDate"], ["weight", "height", "caloriesGoal"])
+        if(result != null) {
+            res.status(422).send(result)
             return
         }
         // Email regex
@@ -143,18 +121,17 @@ app.route('/user')
         const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
         // Check if email is valid
         if(req.body.email.match(emailRegex) === null) {
-            error = "Email is not valid"
+            res.status(422).send({status: 422, message: "Invalid email format"})
+            return
         }
         // Compare passwords
         if(req.body.password !== req.body.passwordConfirm && error === "") {
-            error = "Passwords don't match"
+            res.status(422).send({status: 422, message: "Passwords do not match"})
+            return
         }
         // Check date format
         if(req.body.birthDate.match(dateRegex) === null && error === "") {
-            error = "Field birthDate should be in YYYY-MM-DD format"
-        }
-        if(error !== "") {
-            res.status(422).send({status: 422, message: error})
+            res.status(422).send({status: 422, message: "Field birthDate should be in YYYY-MM-DD format"})
             return
         }
         // Check if email is already taken
@@ -163,21 +140,23 @@ app.route('/user')
             .from(User, "user")
             .where("user.email = :email", { email: req.body.email})
             .getManyAndCount()
-        if(user[1] === 0) {
-            if(req.user.id === req.body.id) {
-                await createQueryBuilder()
+        if(user[1] === 0 || user[0][0].id === req.user.id) {
+            const passwordHash = bcrypt.hashSync(req.body.password, 10)
+            let userUpdate = await createQueryBuilder()
                 .update(User)
                 .set({
                     firstName: req.body.firstName,
                     lastName: req.body.lastName,
                     email: req.body.email,
                     weight: req.body.weight,
+                    passwordHash: passwordHash,
                     height: req.body.height,
                     birthDate: req.body.birthDate,
                     caloriesGoal:  req.body.caloriesGoal
                 })
                 .where("id = :id", {id: req.user.id})
                 .execute()
+            if(userUpdate.affected === 1) {
                 res.status(201).send({status: 201, message: "Created"})
             }
             else {
@@ -226,9 +205,9 @@ app.route('/user')
         res.setHeader("Content-Type", "application/json")
         
         // Check if ID is missing in query parameters
-        const id = req.query.userId
+        const id = req.query.id
         if(id === undefined) {
-            res.status(422).send({status: 422, message: "Missing userId in the query parameters"})
+            res.status(422).send({status: 422, message: "Missing id in the query parameters"})
             return
         }
         // Check if ID is in valid format
@@ -241,17 +220,19 @@ app.route('/user')
         // Check if the user is requesting themselves
         if(!(req.user.id === id)) {
             res.status(401).send({status: "401", message: "Access denied"});
+            return
         }
 
 
         const user = await createQueryBuilder()
-        .select("user")
-        .from(User, "user")
-        .where("user.id = :id", {id: id})
-        .getOne()
+            .select("user")
+            .from(User, "user")
+            .where("user.id = :id", {id: id})
+            .getOne()
 
         if(user !== undefined) {
             delete user.photo;
+            delete user.passwordHash
             res.status(200).send({status: 200, message: user})
         } else {
             res.status(404).send({status: 404, message: "Not found"})
@@ -260,7 +241,7 @@ app.route('/user')
 
 app.route('/meal')
     .get(authenticateJWT, async (req, res) => {
-        console.log('got GET on /food', req.query);
+        console.log('got GET on /meal', req.query);
         res.setHeader('Content-Type', 'application/json');
         // Check if ID is missing in query parameters
         let mealId = req.query.id;
@@ -276,15 +257,15 @@ app.route('/meal')
             }
 
             let meal = await createQueryBuilder()
-            .select("meal")
-            .from(Meal, "meal")
-            .where("meal.id = :id", {id: mealId})
-            .leftJoinAndSelect("meal.user", "user")
-            .leftJoinAndSelect("meal.ingredients", "ingredient")
-            .getOne();
+                .select("meal")
+                .from(Meal, "meal")
+                .where("meal.id = :id", {id: mealId})
+                .leftJoinAndSelect("meal.user", "user")
+                .leftJoinAndSelect("meal.ingredients", "ingredient")
+                .getOne();
 
             if(meal == null) { // Food doesn't exist
-                res.status(404).send({status: "404", message: "Food not found"});
+                res.status(404).send({status: "404", message: "Meal not found"});
             } else if(meal.user == null) { // Meal has no owner
                 delete meal.user;
                 res.status(200).send({status: "200", meal: meal});
@@ -319,7 +300,7 @@ app.route('/meal')
             } 
         }
         
-                // Check field data types
+        // Check field data types
         let result = checkFieldTypes(req.body, ['id', 'name', 'description'], ['calories', 'carbs', 'protein', 'fat']);
         if(result != null) {
             res.status(422).send(result);
@@ -328,12 +309,6 @@ app.route('/meal')
         if(typeof req.body.isPublic != 'boolean') {
             res.status(422).send({status: "422", message: "isPublic field must be a boolean"});
             return
-        }
-        // Validate food id format
-        let validateUUID = testUUID(req.body.id)
-        if (!validateUUID) {
-            res.status(422).send({status: "422", message: "Invalid meal id format"});
-            return;
         }
         for(let i = 0; i < req.body.ingredients.length; i++) {
             let result = checkFieldTypes(req.body.ingredients[i], ['name'], ['amount', 'calories', 'carbs', 'fat', 'protein']);
@@ -354,7 +329,10 @@ app.route('/meal')
                 protein: req.body.ingredients[i].protein
             });
         }
-
+        if(ingredients.length == 0) {
+            res.status(422).send({status: "422", message: "No ingredients provided"});
+            return;
+        }
         let insert = await createQueryBuilder()
             .insert()
             .into(Meal)
@@ -443,6 +421,11 @@ app.route('/meal')
             });
         }
 
+        if(ingredients.length == 0) {
+            res.status(422).send({status: "422", message: "No ingredients provided"});
+            return;
+        }
+
         let mealUpdate = await createQueryBuilder()
             .insert()
             .update(Meal)
@@ -509,33 +492,19 @@ app.route('/meal')
             }
         }
 
-        let meal = await createQueryBuilder()
-            .select("meal")
-            .from(Meal, "meal")
-            .where("meal.id = :id", {id: mealId})
-            .leftJoinAndSelect("meal.user", "user")
-            .leftJoinAndSelect("meal.ingredients", "ingredient")
-            .getOne();
-
-        // Meal has no owner -> nobody can delete it
-        if(meal.user === null) {
-            res.status(401).send({status: "401", message: "Access denied"});
-            return;
-        }
-
         // Check if the user created this food
-        if(req.user.id === meal.user.id) {
-            await createQueryBuilder()
+        
+        const mealDelete = await createQueryBuilder()
             .delete()
             .from(Meal, "meal")
             .where("meal.id = :id", {id: mealId})
+            .andWhere("user = :user", {user: req.user.id})
             .execute();
-
-            res.status(200).send({status: "200", message: "OK"});
-        } 
-        else {
-            res.status(401).send({status: "401", message: "Access denied"});
+        if(mealDelete.affected == 0) {
+            res.status(404).send({status: "404", message: "Meal not found"});
+            return;
         }
+        res.status(200).send({status: "200", message: "OK"});
     })
 
 app.route('/food')
@@ -582,53 +551,23 @@ app.route('/food')
         res.setHeader("Content-Type", "application/json");
 
         const properties = ['name', 'description', 'brand', 'calories', 'carbs', 'protein', 'fat', 'isPublic'];
-        let error = "";
-        
-        let missingColumn = checkFields(req.body, properties);
 
+        let missingColumn = checkFields(req.body, properties);
         // Missing field
         if(missingColumn != null) {
             res.status(422).send({status: "422", message: "Missing field: " + missingColumn});
             return;
-        } else {
-            // Check field types and sizes
-            for (const key in req.body){
-                // String fields
-                if(key === 'name' || key === 'description' || key === 'brand') {
-                    if(typeof req.body[key] !== "string") {
-                        error = 'Field ' + key + ' has to be string';
-                        break
-                    }
-                    else if((req.body[key].length) < 1 && (key === 'name')) { // only name field can't be empty
-                        error = 'Field ' + key + " can't be an empty string";
-                        break
-                    }
-                }
-                // Number fields
-                else if(key === "calories" || key === "carbs" || key === 'protein' || key === 'fat') {
-                    if (typeof req.body[key] !== 'number') {
-                        error = 'Field ' + key + ' has to be integer'
-                        break   
-                    }
-                    else if(req.body[key] < 0) {
-                        error = 'Field ' + key + ' has to be positive'
-                        break
-                    }
-                }
-                // Boolean fields
-                else if(key === 'isPublic') {
-                    if(typeof req.body[key] !== 'boolean') {
-                        error = 'Field ' + key + ' has to be boolean'
-                        break
-                    }
-                }
-            }
-
-            if(error != '') {
-                res.status(422).send({status: 422, message: error})
-                return;
-            }
+        } 
+        // Check field types and sizes
+        const result = checkFieldTypes(req.body, ["name", "description", "brand"], ["calories", "carbs", "fat", "protein"])
+        if(result != null) {
+            res.status(422).send(result)
+            return
         }
+        if(typeof req.body.isPublic !== 'boolean') {
+            res.status(422).send({status: "422", message: "Field isPublic has to be boolean"});
+            return
+        }        
 
         await createQueryBuilder()
         .insert()
@@ -649,11 +588,10 @@ app.route('/food')
         res.status(201).send({status: "201", message: "Food created"});
     })
     .put(authenticateJWT, async (req, res) => {
-        console.log('got PUT on /food', req.query);
+        console.log('got PUT on /food', req.body);
         res.setHeader("Content-Type", "application/json");
 
         const properties = ['id', 'name', 'description', 'brand', 'calories', 'carbs', 'protein', 'fat', 'isPublic'];
-        let error = '';
 
         let missingColumn = checkFields(req.body, properties);
 
@@ -661,67 +599,25 @@ app.route('/food')
         if(missingColumn != null) {
             res.status(422).send({status: "422", message: "Missing field: " + missingColumn});
             return;
-        } else {
+        } 
             let validateUUID = testUUID(req.body['id']);
             if (!validateUUID) {
                 res.status(422).send({status: "422", message: "Invalid food id format"});
                 return;
             }
             
-            // Check field types and sizes
-            for (const key in req.body){
-                // String fields
-                if(key === 'name' || key === 'description' || key === 'brand' || key === 'id') {
-                    if(typeof req.body[key] !== "string") {
-                        error = 'Field ' + key + ' has to be string';
-                        break
-                    }
-                    else if((req.body[key].length) < 1 && (key === 'name')) { // only name field can't be empty
-                        error = 'Field ' + key + " can't be an empty string";
-                        break
-                    }
-                }
-                // Number fields
-                else if(key === "calories" || key === "carbs" || key === 'protein' || key === 'fat') {
-                    if (typeof req.body[key] !== 'number') {
-                        error = 'Field ' + key + ' has to be integer'
-                        break   
-                    }
-                    else if(req.body[key] < 0) {
-                        error = 'Field ' + key + ' has to be positive'
-                        break
-                    }
-                }
-                // Boolean fields
-                else if(key === 'isPublic') {
-                    if(typeof req.body[key] !== 'boolean') {
-                        error = 'Field ' + key + ' has to be boolean'
-                        break
-                    }
-                }
-            }
-
-            if(error != '') {
-                res.status(422).send({status: 422, message: error})
-            }
+        // Check field types and sizes
+        const result = checkFieldTypes(req.body, ["name", "description", "brand"], ["calories", "carbs", "fat", "protein"])
+        if(result != null) {
+            res.status(422).send(result)
+            return
         }
+        if(typeof req.body.isPublic !== 'boolean') {
+            res.status(422).send({status: "422", message: "Field isPublic has to be boolean"});
+            return
+        }  
         
-        let food = await createQueryBuilder()
-        .select("food")
-        .from(Food, "food")
-        .where("food.id = :id", {id: req.body['id']})
-        .leftJoinAndSelect("food.user", "user.id")
-        .getOne();
-
-        // Food has no owner -> nobody can delete it
-        if(food.user === null) {
-            res.status(401).send({status: "401", message: "Access denied"});
-            return;
-        }
-
-        // Check if the user created this food
-        if(food.user.id === food.user.id) {
-            await createQueryBuilder()
+        const foodUpdate = await createQueryBuilder()
             .update(Food)
             .set({
                 name: req.body.name,
@@ -734,11 +630,13 @@ app.route('/food')
                 isPublic: req.body.isPublic,
             })
             .where("id = :id", {id: req.body['id']})
+            .andWhere("user = :user", {user: req.user.id})
             .execute();
-
+        if(foodUpdate.affected === 0) {
+            res.status(404).send({status: "404", message: "Not found"});
+        }
+        else {
             res.status(200).send({status: "200", message: "Food updated"});
-        } else {
-            res.status(401).send({status: "401", message: "Access denied"});
         }
     })
     .delete(authenticateJWT, async (req, res) => {
@@ -758,33 +656,17 @@ app.route('/food')
                 return;
             }
         }
-
-        // Get the food from DB
-        let food = await createQueryBuilder()
-        .select("food.id")
-        .from(Food, "food")
-        .where("food.id = :id", {id: foodId})
-        .leftJoinAndSelect("food.user", "user.id")
-        .getOne();
-
-        // Food has no owner -> nobody can delete it
-        if(food.user === null) {
-            res.status(401).send({status: "401", message: "Access denied"});
-            return;
-        }
-
-        // Check if the user created this food
-        if(req.user.id === food.user.id) {
-            await createQueryBuilder()
+        const foodDelete = await createQueryBuilder()
             .delete()
             .from(Food, "food")
             .where("food.id = :id", {id: foodId})
+            .andWhere("user = :user", {user: req.user.id})
             .execute();
-
-        res.status(200).send({status: "200", message: "OK"});
-        } 
+        if(foodDelete.affected === 0) {
+            res.status(404).send({status: "404", message: "Not found"});
+        }
         else {
-            res.status(401).send({status: "401", message: "Access denied"});
+            res.status(200).send({status: "200", message: "Food deleted"});
         }
     })
 
@@ -1012,6 +894,12 @@ app.post('/login', async (req, res) => {
         res.status(422).send({status: 422, message: "Email or password is missing"})
         return
     }
+    // Check if fields are strings
+    if(typeof req.body.email !== "string" || typeof req.body.password !== "string") {
+        res.status(422).send({status: 422, message: "Email or password is not a string"})
+        return
+    }
+
     // Find the email
     const user = await createQueryBuilder()
         .select("user")
@@ -1051,34 +939,10 @@ app.post('/register', async (req, res) => {
         res.status(422).send({status: 422, message: "Request is missing " + field + " field"})
         return
     }
-    
     // Check field types and sizes
-    for (const key in req.body){
-        // String fields
-        if((key === "firstName" || key === "lastName" || key === "password" || key === "passwordConfirm" || key === "birthDate")) {
-            if(typeof req.body[key] !== "string") {
-                error = "Field " + key + " has to be string"
-                break
-            }
-            else if(req.body[key].length < 1) {
-                error = "Field " + key + " can't be an empty string"
-                break
-            }
-        }
-        // Number fields
-        else if((key === "weight" || key === "height" || key === "caloriesGoal")) {
-            if (typeof req.body[key] !== "number") {
-                error = "Field " + key + " has to be integer"
-                break   
-            }
-            else if(req.body[key] < 0) {
-                error = "Field " + key + " has to be positive"
-                break
-            }
-        }
-    }
-    if(error !== "") {
-        res.status(422).send({status: 422, message: error})
+    const result = checkFieldTypes(req.body, ["firstName", "lastName", "password", "passwordConfirm", "email", "birthDate"], ["weight", "height", "caloriesGoal"])
+    if(result != null) {
+        res.status(422).send(result)
         return
     }
     
