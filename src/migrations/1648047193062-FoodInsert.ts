@@ -14,7 +14,7 @@ export class DataInsert1648047193062 implements MigrationInterface {
                 VALUES ('c580405c-d8da-4fe4-b1d2-cf7e2134ef43', 'Grilled chicken', '', '', 88.50, 0.89, 1.77, 19.40, true, null);
             INSERT INTO public.food ("id", "name", "brand", "description", "calories", "carbs", "fat", "protein", "isPublic", "userId") 
                 VALUES ('2dd6da04-074e-49bf-a672-1d3eb2d9a15a', 'Pork tenderloin', '', '', 106.20, 0.89, 2.21, 20.27, true, null);
-            INSERT INTO public.food ("id""name", "brand", "description", "calories", "carbs", "fat", "protein", "isPublic", "userId") 
+            INSERT INTO public.food ("id", "name", "brand", "description", "calories", "carbs", "fat", "protein", "isPublic", "userId") 
                 VALUES ('4ea26a6e-eda8-47b2-a7d2-9e339f943ab2', 'Pork chops', '', '', 114.6, 0.88, 3.97, 20.28, true, null);
             INSERT INTO public.food ("id", "name", "brand", "description", "calories", "carbs", "fat", "protein", "isPublic", "userId") 
                 VALUES ('a9ca78c1-fad6-4cdb-84e5-0607e0868405', 'Apple', '', 'Medium red apple', 52, 13.81, 0.17, 0.26, true, null);

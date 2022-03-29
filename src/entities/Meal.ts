@@ -1,6 +1,7 @@
-import {Entity, BaseEntity, PrimaryGeneratedColumn, Column, ManyToOne, ManyToMany, JoinTable} from "typeorm";
+import {Entity, BaseEntity, PrimaryGeneratedColumn, Column, ManyToOne, ManyToMany, JoinTable, OneToMany} from "typeorm";
 import { User } from "./User";
 import { Food } from "./Food";
+import { Ingredient } from "./Ingredient";
 
 @Entity()
 export class Meal extends BaseEntity{
@@ -34,7 +35,6 @@ export class Meal extends BaseEntity{
     @Column()
     isPublic: boolean
 
-    @ManyToMany(() => Food)
-    @JoinTable()
-    foods: Food[]
+    @OneToMany(() => Ingredient, ingredient => ingredient.meal)
+    ingredients: Ingredient[]
 }

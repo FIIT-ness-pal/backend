@@ -1,4 +1,5 @@
-import {Entity, BaseEntity, PrimaryGeneratedColumn, Column, ManyToOne} from "typeorm";
+import {Entity, BaseEntity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany} from "typeorm";
+import { Ingredient } from "./Ingredient";
 import {User} from "./User"
 
 @Entity()
@@ -37,4 +38,7 @@ export class Food extends BaseEntity{
 
     @Column()
     isPublic: boolean
+
+    @OneToMany(() => Ingredient, ingredient => ingredient.food)
+    ingredients: Ingredient[]
 }
