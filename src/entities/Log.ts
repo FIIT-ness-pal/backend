@@ -7,7 +7,7 @@ export class Log extends BaseEntity{
     @PrimaryGeneratedColumn("uuid")
     id: number;
 
-    @ManyToOne(() => User, user => user.logs)
+    @ManyToOne(() => User, user => user.logs, { onDelete: 'CASCADE' })
     user: User
 
     @Column()
