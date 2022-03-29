@@ -6,6 +6,12 @@ export default class CreateUsers implements Seeder {
   public async run(factory: Factory, connection: Connection): Promise<any> {
     await connection
       .createQueryBuilder()
+      .delete()
+      .from(User)
+      .execute()
+
+    await connection
+      .createQueryBuilder()
       .insert()
       .into(User)
       .values([

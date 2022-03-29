@@ -47,7 +47,7 @@ export function checkFieldTypes(body, stringFields, numberFields): object {
             if(typeof body[key] !== "string") {
                 return {status: 422, message: `Field ${key} must be a string`}
             }
-            else if((body[key].length < 1) && (key != 'description') && (key != 'name')) {
+            else if((body[key].length < 1) && (key != 'description') && (key != 'brand')) {
                 return {status: 422, message: `Field ${key} must be at least 1 character long`}
             }
         }

@@ -5,7 +5,12 @@ import { User } from '../entities/User';
     
 export default class CreateLogs implements Seeder {
     public async run(factory: Factory, connection: Connection): Promise<any> {
-
+    await connection
+        .createQueryBuilder()
+        .delete()
+        .from(Log)
+        .execute()
+      
     const adam = await connection
         .createQueryBuilder()
         .select("user")

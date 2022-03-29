@@ -262,9 +262,8 @@ app.route('/meal')
     .get(authenticateJWT, async (req, res) => {
         console.log('got GET on /food', req.query);
         res.setHeader('Content-Type', 'application/json');
-
+        // Check if ID is missing in query parameters
         let mealId = req.query.id;
-
         if(!mealId) {
             res.status(422).send({status: "422", message: "Missing meal id parameter"});
             return;
@@ -282,7 +281,6 @@ app.route('/meal')
             .where("meal.id = :id", {id: mealId})
             .leftJoinAndSelect("meal.user", "user")
             .leftJoinAndSelect("meal.ingredients", "ingredient")
-            .leftJoinAndSelect("ingredient.food", "food")
             .getOne();
 
             if(meal == null) { // Food doesn't exist
@@ -299,90 +297,202 @@ app.route('/meal')
         }
     })
     .post(authenticateJWT, async (req, res) => {
-        console.log('got POST on /food', req.query);
+        console.log('got POST on /food', req.body);
         res.setHeader("Content-Type", "application/json");
 
         const properties = ['name', 'description', 'calories', 'carbs', 'protein', 'fat', 'isPublic', 'ingredients'];
-        const subProperties = ['id', 'amount'];
-        let error = "";
+        const subProperties = ['name', 'amount', 'calories', 'carbs', 'fat', 'protein'];
 
         // Check missing fields in request body
         let missingColumn = checkFields(req.body, properties);
+        if(missingColumn !== null) {
+            res.status(422).send({status: "422", message: "Missing " + missingColumn + " field"});
+            return;
+        }
         let missingIngredientsColumn;
         for(let i = 0; i < req.body.ingredients.length; i++) {
-            missingIngredientsColumn = checkFields(req.body.ingredients[i], subProperties);
+            const ingredient = req.body.ingredients[i];
+            missingIngredientsColumn = checkFields(ingredient, subProperties);
+            if(missingIngredientsColumn != null) {
+                res.status(422).send({status: "422", message: "Ingredient " + req.body.ingredients[i].name + " missing " + missingIngredientsColumn + " field"});
+                return;
+            } 
         }
-
-        if((missingColumn !== null) || (missingIngredientsColumn !== null)) {
-            res.status(422).send({status: "422", message: "Missing " + missingColumn + " or " + missingIngredientsColumn});
+        
+                // Check field data types
+        let result = checkFieldTypes(req.body, ['id', 'name', 'description'], ['calories', 'carbs', 'protein', 'fat']);
+        if(result != null) {
+            res.status(422).send(result);
             return;
-        } else {
-            // Check field data types
-            let result = checkFieldTypes(req.body, ['name', 'description'], ['calories', 'carbs', 'protein', 'fat']);
+        }
+        if(typeof req.body.isPublic != 'boolean') {
+            res.status(422).send({status: "422", message: "isPublic field must be a boolean"});
+            return
+        }
+        // Validate food id format
+        let validateUUID = testUUID(req.body.id)
+        if (!validateUUID) {
+            res.status(422).send({status: "422", message: "Invalid meal id format"});
+            return;
+        }
+        for(let i = 0; i < req.body.ingredients.length; i++) {
+            let result = checkFieldTypes(req.body.ingredients[i], ['name'], ['amount', 'calories', 'carbs', 'fat', 'protein']);
             if(result != null) {
                 res.status(422).send(result);
                 return;
-            }
-            for(let i = 0; i < req.body.ingredients.length; i++) {
-                let result = checkFieldTypes(req.body.ingredients[i], ['id'], ['amount']);
-                if(result != null) {
-                    res.status(422).send(result);
-                    return;
-                }
-
-                let validateUUID = testUUID(req.body.ingredients[i].id);
-                if (!validateUUID) {
-                    res.status(422).send({status: "422", message: "Invalid ingredient id format"});
-                    return;
-                }
-
-            }
+            }  
         }
-
         let ingredients = [];
         for(let i = 0; i < req.body.ingredients.length; i++) {
             ingredients.push({
                 food: req.body.ingredients[i].id,
-                foodAmount: req.body.ingredients[i].amount
+                name: req.body.ingredients[i].name,
+                amount: req.body.ingredients[i].amount,
+                calories: req.body.ingredients[i].calories,
+                carbs: req.body.ingredients[i].carbs,
+                fat: req.body.ingredients[i].fat,
+                protein: req.body.ingredients[i].protein
             });
         }
 
         let insert = await createQueryBuilder()
-        .insert()
-        .into(Meal)
-        .values({
-            name: req.body.name,
-            description: req.body.description,
-            calories: req.body.calories,
-            carbs: req.body.carbs,
-            protein: req.body.protein,
-            fat: req.body.fat,
-            isPublic: req.body.isPublic,
-            user: req.user.id
-        })
-        .execute()
+            .insert()
+            .into(Meal)
+            .values({
+                name: req.body.name,
+                description: req.body.description,
+                calories: req.body.calories,
+                carbs: req.body.carbs,
+                protein: req.body.protein,
+                fat: req.body.fat,
+                isPublic: req.body.isPublic,
+                user: req.user.id
+            })
+            .execute()
 
         let mealId = insert.identifiers[0].id;
 
         for(let i = 0; i < ingredients.length; i++) {
             await createQueryBuilder()
-            .insert()
-            .into(Ingredient)
-            .values({
-                meal: mealId,
-                food: ingredients[i].food,
-                foodAmount: ingredients[i].foodAmount
-            })
-            .execute()
+                .insert()
+                .into(Ingredient)
+                .values({
+                    meal: mealId,
+                    name: ingredients[i].name,
+                    amount: ingredients[i].amount,
+                    calories: ingredients[i].calories,
+                    carbs: ingredients[i].carbs,
+                    protein: ingredients[i].protein,
+                    fat: ingredients[i].fat
+                })
+                .execute()
         }
 
         res.status(201).send({status: "201", message: "Meal created"});
     })
-    .put((req, res) => {
+    .put(authenticateJWT, async (req, res) => {
+        console.log('got PUT on /food', req.body);
+        res.setHeader("Content-Type", "application/json");
 
+        const properties = ['id', 'name', 'description', 'calories', 'carbs', 'protein', 'fat', 'isPublic', 'ingredients'];
+        const subProperties = ['name', 'amount', 'calories', 'carbs', 'fat', 'protein'];
+
+        // Check missing fields in request body
+        let missingColumn = checkFields(req.body, properties);
+        if(missingColumn !== null) {
+            res.status(422).send({status: "422", message: "Missing " + missingColumn + " field"});
+            return;
+        }
+        let missingIngredientsColumn;
+        for(let i = 0; i < req.body.ingredients.length; i++) {
+            const ingredient = req.body.ingredients[i];
+            missingIngredientsColumn = checkFields(ingredient, subProperties);
+            if(missingIngredientsColumn != null) {
+                res.status(422).send({status: "422", message: "Ingredient " + req.body.ingredients[i].name + " missing " + missingIngredientsColumn + " field"});
+                return;
+            } 
+        }
+        
+        // Check field data types
+        let result = checkFieldTypes(req.body, ['id', 'name', 'description'], ['calories', 'carbs', 'protein', 'fat']);
+        if(result != null) {
+            res.status(422).send(result);
+            return;
+        }
+        if(typeof req.body.isPublic != 'boolean') {
+            res.status(422).send({status: "422", message: "isPublic field must be a boolean"});
+            return
+        }
+        for(let i = 0; i < req.body.ingredients.length; i++) {
+            let result = checkFieldTypes(req.body.ingredients[i], ['name'], ['amount', 'calories', 'carbs', 'fat', 'protein']);
+            if(result != null) {
+                res.status(422).send(result);
+                return;
+            }  
+        }
+        let ingredients = [];
+        for(let i = 0; i < req.body.ingredients.length; i++) {
+            ingredients.push({
+                food: req.body.ingredients[i].id,
+                name: req.body.ingredients[i].name,
+                amount: req.body.ingredients[i].amount,
+                calories: req.body.ingredients[i].calories,
+                carbs: req.body.ingredients[i].carbs,
+                fat: req.body.ingredients[i].fat,
+                protein: req.body.ingredients[i].protein
+            });
+        }
+
+        let mealUpdate = await createQueryBuilder()
+            .insert()
+            .update(Meal)
+            .set({
+                name: req.body.name,
+                description: req.body.description,
+                calories: req.body.calories,
+                carbs: req.body.carbs,
+                protein: req.body.protein,
+                fat: req.body.fat,
+                isPublic: req.body.isPublic,
+                user: req.user.id
+            })
+            .where("id = :id", {id: req.body.id})
+            .andWhere("user = :user", {user: req.user.id})
+            .execute()
+
+        if(mealUpdate.affected == 0) {
+            res.status(404).send({status: "404", message: "Meal not found"});
+            return
+        }
+
+        // Delete old ingredients
+        await createQueryBuilder()
+            .delete()
+            .from(Ingredient)
+            .where("meal = :meal", {meal: req.body.id})
+            .execute()
+
+        // Insert new ingredients
+        for(let i = 0; i < ingredients.length; i++) {
+            await createQueryBuilder()
+                .insert()
+                .into(Ingredient)
+                .values({
+                    meal: req.body.id,
+                    name: ingredients[i].name,
+                    amount: ingredients[i].amount,
+                    calories: ingredients[i].calories,
+                    carbs: ingredients[i].carbs,
+                    protein: ingredients[i].protein,
+                    fat: ingredients[i].fat
+                })
+                .execute()
+        }
+        res.status(201).send({status: "201", message: "Meal updated"});
+        
     })
     .delete(authenticateJWT, async (req, res) => {
-        console.log('got GET on /food', req.query);
+        console.log('got DELETE on /meal', req.query);
         res.setHeader('Content-Type', 'application/json');
 
         let mealId = req.query.id;
@@ -400,13 +510,12 @@ app.route('/meal')
         }
 
         let meal = await createQueryBuilder()
-        .select("meal")
-        .from(Meal, "meal")
-        .where("meal.id = :id", {id: mealId})
-        .leftJoinAndSelect("meal.user", "user")
-        .leftJoinAndSelect("meal.ingredients", "ingredient")
-        .leftJoinAndSelect("ingredient.food", "food")
-        .getOne();
+            .select("meal")
+            .from(Meal, "meal")
+            .where("meal.id = :id", {id: mealId})
+            .leftJoinAndSelect("meal.user", "user")
+            .leftJoinAndSelect("meal.ingredients", "ingredient")
+            .getOne();
 
         // Meal has no owner -> nobody can delete it
         if(meal.user === null) {
@@ -415,7 +524,7 @@ app.route('/meal')
         }
 
         // Check if the user created this food
-        if(meal.user.id === meal.user.id) {
+        if(req.user.id === meal.user.id) {
             await createQueryBuilder()
             .delete()
             .from(Meal, "meal")
@@ -665,7 +774,7 @@ app.route('/food')
         }
 
         // Check if the user created this food
-        if(food.user.id === food.user.id) {
+        if(req.user.id === food.user.id) {
             await createQueryBuilder()
             .delete()
             .from(Food, "food")

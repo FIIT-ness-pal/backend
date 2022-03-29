@@ -38,7 +38,4 @@ export class Food extends BaseEntity{
 
     @Column()
     isPublic: boolean
-
-    @OneToMany(() => Ingredient, ingredient => ingredient.food)
-    ingredients: Ingredient[]
 }
