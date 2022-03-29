@@ -513,41 +513,46 @@ app.route('/food')
             .where("food.id = :id", {id: foodId})
             .execute();
 
-            res.status(200).send({status: "200", message: "OK"});
-        } else {
+        res.status(200).send({status: "200", message: "OK"});
+        } 
+        else {
             res.status(401).send({status: "401", message: "Access denied"});
         }
     })
 
 app.route('/log')
-    .get(async (req, res) => {
+    .get(authenticateJWT, async (req, res) => {
         console.log("got GET on /log", req.query)
         res.setHeader("Content-Type", "application/json")
+        // Check if query contains date parameter
         const date = req.query.date
         if(date === undefined) {
             res.status(422).send({status: 422, message: "Missing date in the query parameters"})
             return
         }
+        // Check the date format
         const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
         if(date.match(dateRegex) === null) {
             res.status(422).send({status: 422, message: "Date should be in YYYY-MM-DD format"})
             return
         }
+        // Get the logs from database
         const logs = await createQueryBuilder()
             .select("log")
             .where("log.date = :date", {date: `%${date}%`})
+            .andWhere("log.userId = :id", {id: req.user.id})
             .from(Log, "log")
             .getMany()
         res.status(200).send({status: 200, message: "OK", logs: logs})
     })
-    .post(async (req, res) => {
+    .post(authenticateJWT, async (req, res) => {
         console.log("got POST on /log", req.body)
         res.setHeader("Content-Type", "application/json")
         // Check if any fields are missing
         const fields = ["name", "amount", "calories", "carbs", "fat", "protein", "date", "time"]
-        const column = checkFields(req.body, fields)
-        if (column != null) {
-            res.status(422).send({status: 422, message: "Request is missing " + column + " field"})
+        const field = checkFields(req.body, fields)
+        if (field != null) {
+            res.status(422).send({status: 422, message: "Request is missing " + field + " field"})
             return
         }
         const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
@@ -562,6 +567,7 @@ app.route('/log')
             res.status(422).send({status: 422, message: "Time should be in HH:MM:SS format"})
             return
         }
+        
         await createQueryBuilder()
             .insert()
             .into(Log)
@@ -574,7 +580,7 @@ app.route('/log')
                 protein: req.body.protein,
                 date: req.body.date,
                 time:  req.body.time,
-                user: null    
+                user: req.user.id    
             }])
             .execute()
         res.status(201).send({status: 201, message: "Created"})
