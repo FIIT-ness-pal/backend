@@ -891,7 +891,6 @@ app.route('/log')
             res.status(422).send({status: 422, message: "Invalid log id format"})
             return
         }
-        console.log(req.user.id)
         // Update the log
         const logUpdate = await createQueryBuilder()
             .update(Log)
@@ -909,7 +908,7 @@ app.route('/log')
             .where("id = :id", {id: req.body.id})
             .andWhere("user = :userId", {userId: req.user.id})
             .execute()
-        // SUccesfully updated
+        // Succesfully updated
         if(logUpdate.affected == 1)
             res.status(201).send({status: 201, message: "Updated"})
         // No log with that id
@@ -946,11 +945,9 @@ app.route('/log')
             res.status(404).send({status: 404, message: "Not found"})
     })
 
-app.get('/meals', async (req, res) => {
+app.get('/meals', authenticateJWT, async (req, res) => {
     console.log("got GET on /meals", req.query)
     res.setHeader("Content-Type", "application/json")
-    // TODO get userId from JWT
-    const userId = "44de85bb-7ddc-436a-a653-f139a45f1009"
     const name = req.query.name
     // There is no name parameter
     if(name === undefined) {
@@ -960,23 +957,27 @@ app.get('/meals', async (req, res) => {
     const meals = await createQueryBuilder()
         .select("meal")
         .from(Meal, "meal")
-        .where("meal.name like :name", { name: `%${name}%`})
+        .where("meal.name ILIKE :name", { name: `%${name}%`})
         .andWhere(
             // Get public or user's meals
             new Brackets((qb) => {
                 qb.where("meal.isPublic = true")
-                .orWhere("meal.userId = :userId", { userId: userId})
+                .orWhere("meal.userId = :userId", { userId: req.user.id})
             })
         )
         .getMany()
-    res.status(200).send({status: 200, message: "OK", meals: meals})
+    if(meals.length == 0) {
+        res.status(404).send({status: 404, message: "Not found"})
+    }
+    else {
+        res.status(200).send({status: 200, message: "OK", meals: meals})
+    }
 })
 
-app.get('/foods', async (req, res) => {
+app.get('/foods', authenticateJWT, async (req, res) => {
     console.log("got GET on /foods", req.query)
     res.setHeader("Content-Type", "application/json")
     // TODO get userId from JWT
-    const userId = "44de85bb-7ddc-436a-a653-f139a45f1009"
     const name = req.query.name
     // There is no name parameter
     if(name === undefined) {
@@ -986,16 +987,21 @@ app.get('/foods', async (req, res) => {
     const foods = await createQueryBuilder()
         .select("food")
         .from(Food, "food")
-        .where("food.name like :name", { name: `%${name}%`})
+        .where("food.name ILIKE :name", { name: `%${name}%`})
         .andWhere(
             new Brackets((qb) => {
                 // Get public or user's foods
                 qb.where("food.isPublic = true")
-                .orWhere("food.userId = :userId", { userId: userId})
+                .orWhere("food.userId = :userId", { userId: req.user.id})
             })
         )
         .getMany()
-    res.status(200).send({status: 200, message: "OK", foods: foods})
+    if(foods.length == 0) {
+        res.status(404).send({status: 404, message: "Not found"})
+    }
+    else {
+        res.status(200).send({status: 200, message: "OK", foods: foods})
+    }
 })
 
 app.post('/login', async (req, res) => {
