@@ -15,7 +15,7 @@ import { authenticateJWT, checkFields, checkFieldTypes, testUUID } from "./funct
 import { Ingredient } from "./entities/Ingredient";
 
 var app = express();
-var port = 3000;
+var port = process.env.PORT || 8080;
 
 // Multer for image storage setup
 var imageStorage = multer.diskStorage({
@@ -1005,7 +1005,9 @@ app.post('/register', async (req, res) => {
     
 })
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
     console.log(`Server is running on port ${port}`)
-})
+});
+
+server.keepAliveTimeout = 7000000;
 
