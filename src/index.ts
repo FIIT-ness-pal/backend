@@ -123,7 +123,7 @@ app.route('/user')
         // Email regex
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         // Allows any year and 31 days in each month
-        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        const dateRegex = /^\d{4}-([1-9]|1[012])-([1-9]{1}|[12][0-9]{1}|3[01]{1})$/
         // Check if email is valid
         if(req.body.email.match(emailRegex) === null) {
             res.status(422).send({status: 422, message: "Invalid email format"})
@@ -208,13 +208,14 @@ app.route('/user')
     .get(authenticateJWT, async (req, res) => {
         console.log("got GET on /user", req.query)
         res.setHeader("Content-Type", "application/json")
-        
+        /*
         // Check if ID is missing in query parameters
         const id = req.query.id
         if(id === undefined) {
             res.status(422).send({status: 422, message: "Missing id in the query parameters"})
             return
         }
+        
         // Check if ID is in valid format
         const validateUUID = testUUID(id);
         if(!validateUUID) {
@@ -227,12 +228,12 @@ app.route('/user')
             res.status(401).send({status: "401", message: "Access denied"});
             return
         }
-
+        */
 
         const user = await createQueryBuilder()
             .select("user")
             .from(User, "user")
-            .where("user.id = :id", {id: id})
+            .where("user.id = :id", {id: req.user.id})
             .getOne()
 
         if(user !== undefined) {
@@ -275,8 +276,10 @@ app.route('/meal')
                 delete meal.user;
                 res.status(200).send({status: "200", meal: meal});
             } else if((meal.user.id === req.user.id) || meal.isPublic) { // If the user who requesting the meal is the owner or if the meal is public
+                const firstName = meal.user.firstName
+                const lastName = meal.user.lastName 
                 delete meal.user;
-                res.status(200).send({status: "200", meal: meal});
+                res.status(200).send({status: "200", meal: {...meal, firstName: firstName, lastName: lastName}});
             } else { // The meal exists but the user doesn't have access to it
                 res.status(401).send({status: "401", message: "Access denied"});
             }
@@ -686,7 +689,7 @@ app.route('/log')
             return
         }
         // Check the date format
-        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        const dateRegex = /^\d{4}-([1-9]|1[012])-([1-9]{1}|[12][0-9]{1}|3[01]{1})$/
         if(date.match(dateRegex) === null) {
             res.status(422).send({status: 422, message: "Date should be in YYYY-MM-DD format"})
             return
@@ -710,7 +713,7 @@ app.route('/log')
             res.status(422).send({status: 422, message: "Request is missing " + field + " field"})
             return
         }
-        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        const dateRegex = /^\d{4}-([1-9]|1[012])-([1-9]{1}|[12][0-9]{1}|3[01]{1})$/
         const timeRegex = /^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/
         // Check date format
         if(req.body.date.match(dateRegex) === null) {
@@ -760,7 +763,7 @@ app.route('/log')
             res.status(422).send(result)
             return
         }
-        const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+        const dateRegex = /^\d{4}-([1-9]|1[012])-([1-9]{1}|[12][0-9]{1}|3[01]{1})$/
         const timeRegex = /^([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/
         // Check date format
         if(req.body.date.match(dateRegex) === null) {
@@ -954,7 +957,7 @@ app.post('/register', async (req, res) => {
     // Email regex
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     // Allows any year and 31 days in each month
-    const dateRegex = /^\d{4}-(0[1-9]|1[012])-(0[1-9]{1}|[12][0-9]{1}|3[01]{1})$/
+    const dateRegex = /^\d{4}-([1-9]|1[012])-([1-9]{1}|[12][0-9]{1}|3[01]{1})$/
     // Check if email is valid
     if(req.body.email.match(emailRegex) === null) {
         error = "Email is not valid"
