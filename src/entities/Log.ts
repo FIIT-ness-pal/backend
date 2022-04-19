@@ -16,16 +16,16 @@ export class Log extends BaseEntity{
     @Column()
     amount: number
 
-    @Column()
+    @Column("float")
     calories: number
 
-    @Column()
+    @Column("float")
     carbs: number
 
-    @Column()
+    @Column("float")
     fat: number
 
-    @Column()
+    @Column("float")
     protein: number
 
     @Column("date")
